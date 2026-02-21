@@ -29,12 +29,6 @@ const statusBadgeClass = (s) => {
   return 'badge-moderno badge-info-moderno';
 };
 
-const statusBadge = (s) => {
-  if (s === 'concluido') return 'badge badge-success';
-  if (s === 'cancelado') return 'badge badge-danger';
-  return 'badge badge-info';
-};
-
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const formatDateTime = (dt) => {
@@ -43,6 +37,246 @@ const formatDateTime = (dt) => {
   return d.toLocaleString('pt-BR');
 };
 
+const formatMoeda = (valor) => {
+  if (!valor && valor !== 0) return '-';
+  return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+};
+
+// ============================================================
+// COMPONENTE RELATÓRIO FINANCEIRO
+// ============================================================
+function RelatorioFinanceiro({ funcionarios, onVoltar }) {
+  const [dados, setDados] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState('');
+  const [filtros, setFiltros] = useState({
+    data_inicio: '',
+    data_fim: '',
+    responsavel_id: '',
+    pago: '',
+  });
+
+  const carregar = async () => {
+    setLoading(true);
+    setErro('');
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      Object.entries(filtros).forEach(([k, v]) => { if (v !== '') params.append(k, v); });
+      const resp = await fetch(`${API_URL}/protocolos/financeiro/relatorio?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) throw new Error('Erro ao carregar relatório');
+      const json = await resp.json();
+      setDados(json);
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { carregar(); }, []);
+
+  const marcarPago = async (protocoloId, pago) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${API_URL}/protocolos/${protocoloId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orcamento_pago: pago }),
+      });
+      await carregar();
+    } catch (e) {
+      setErro(e.message);
+    }
+  };
+
+  return (
+    <div className="protocolos-container">
+      <div className="protocolos-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <button className="btn-action btn-action-edit" onClick={onVoltar}>← Voltar</button>
+        <div>
+          <h1 className="protocolos-title">💰 Relatório Financeiro</h1>
+          <p className="protocolos-subtitle">Orçamentos e valores a receber</p>
+        </div>
+      </div>
+
+      {erro && <div className="alert-moderno alert-error-moderno">⚠️ {erro}</div>}
+
+      {/* Filtros */}
+      <div className="protocolos-card" style={{ marginBottom: '1.5rem' }}>
+        <div className="card-header-protocolos">
+          <h2 className="card-title-protocolos">Filtros</h2>
+          <div className="filtros-area">
+            <input
+              type="date"
+              className="input-moderno"
+              title="Data início"
+              value={filtros.data_inicio}
+              onChange={(e) => setFiltros({ ...filtros, data_inicio: e.target.value })}
+            />
+            <input
+              type="date"
+              className="input-moderno"
+              title="Data fim"
+              value={filtros.data_fim}
+              onChange={(e) => setFiltros({ ...filtros, data_fim: e.target.value })}
+            />
+            <select
+              className="select-moderno"
+              value={filtros.responsavel_id}
+              onChange={(e) => setFiltros({ ...filtros, responsavel_id: e.target.value })}
+            >
+              <option value="">Todos responsáveis</option>
+              {funcionarios.map((f) => (
+                <option key={f.id} value={f.id}>{f.nome}</option>
+              ))}
+            </select>
+            <select
+              className="select-moderno"
+              value={filtros.pago}
+              onChange={(e) => setFiltros({ ...filtros, pago: e.target.value })}
+            >
+              <option value="">Todos</option>
+              <option value="false">Pendentes</option>
+              <option value="true">Pagos</option>
+            </select>
+            <button className="btn-moderno btn-primary-moderno" onClick={carregar}>
+              🔍 Filtrar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {loading && <div style={{ textAlign: 'center', padding: '3rem', color: '#666' }}>Carregando...</div>}
+
+      {!loading && dados && (
+        <>
+          {/* Cards de totais */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', borderLeft: '4px solid #3b82f6' }}>
+              <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Total Geral</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1f2937', marginTop: '0.25rem' }}>{formatMoeda(dados.totais.total_geral)}</div>
+              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>{dados.totais.total_protocolos} protocolo(s)</div>
+            </div>
+            <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', borderLeft: '4px solid #f59e0b' }}>
+              <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>A Receber</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#d97706', marginTop: '0.25rem' }}>{formatMoeda(dados.totais.total_a_receber)}</div>
+              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>{dados.totais.qtd_pendentes} pendente(s)</div>
+            </div>
+            <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', borderLeft: '4px solid #10b981' }}>
+              <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Recebido</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#059669', marginTop: '0.25rem' }}>{formatMoeda(dados.totais.total_recebido)}</div>
+              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>{dados.totais.qtd_pagos} pago(s)</div>
+            </div>
+          </div>
+
+          {/* Por responsável */}
+          {dados.por_responsavel.length > 0 && (
+            <div className="protocolos-card" style={{ marginBottom: '1.5rem' }}>
+              <div className="card-header-protocolos">
+                <h2 className="card-title-protocolos">Por Responsável</h2>
+              </div>
+              <div className="table-container">
+                <table className="table-moderno">
+                  <thead>
+                    <tr>
+                      <th>Responsável</th>
+                      <th>Setor</th>
+                      <th>Protocolos</th>
+                      <th>Total</th>
+                      <th>Recebido</th>
+                      <th>Pendente</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dados.por_responsavel.map((r, i) => (
+                      <tr key={i}>
+                        <td><strong>{r.responsavel_nome}</strong></td>
+                        <td>{r.responsavel_setor || '-'}</td>
+                        <td>{r.total_protocolos}</td>
+                        <td><strong>{formatMoeda(r.total_valor)}</strong></td>
+                        <td style={{ color: '#059669' }}>{formatMoeda(r.total_recebido)}</td>
+                        <td style={{ color: '#d97706' }}>{formatMoeda(r.total_pendente)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Lista de protocolos */}
+          <div className="protocolos-card">
+            <div className="card-header-protocolos">
+              <h2 className="card-title-protocolos">Protocolos com Orçamento</h2>
+            </div>
+            <div className="table-container">
+              <table className="table-moderno">
+                <thead>
+                  <tr>
+                    <th>Número</th>
+                    <th>Serviço</th>
+                    <th>Responsável</th>
+                    <th>Data Entrada</th>
+                    <th>Status</th>
+                    <th>Valor</th>
+                    <th>Situação</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dados.protocolos.length === 0 && (
+                    <tr><td colSpan="8" style={{ textAlign: 'center' }}>Nenhum protocolo com orçamento encontrado</td></tr>
+                  )}
+                  {dados.protocolos.map((p) => (
+                    <tr key={p.id}>
+                      <td><strong>{p.numero}</strong></td>
+                      <td>{p.servico_nome}</td>
+                      <td>{p.responsavel_nome}</td>
+                      <td>{String(p.data_entrada).slice(0, 10)}</td>
+                      <td><span className={statusBadgeClass(p.status)}>{statusLabel(p.status)}</span></td>
+                      <td><strong style={{ color: '#1f2937' }}>{formatMoeda(p.orcamento_valor)}</strong></td>
+                      <td>
+                        <span className={`badge-moderno ${p.orcamento_pago ? 'badge-success-moderno' : 'badge-warning-moderno'}`}>
+                          {p.orcamento_pago ? '✅ Pago' : '⏳ Pendente'}
+                        </span>
+                      </td>
+                      <td>
+                        {p.orcamento_pago ? (
+                          <button
+                            className="btn-action btn-action-edit"
+                            onClick={() => marcarPago(p.id, false)}
+                            title="Marcar como pendente"
+                          >
+                            ↩️ Desfazer
+                          </button>
+                        ) : (
+                          <button
+                            className="btn-action btn-action-success"
+                            onClick={() => marcarPago(p.id, true)}
+                            title="Marcar como pago"
+                          >
+                            ✅ Marcar Pago
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// COMPONENTE PRINCIPAL PROTOCOLOS
+// ============================================================
 export default function Protocolos({ usuario }) {
   const [itens, setItens] = useState([]);
   const [servicos, setServicos] = useState([]);
@@ -50,6 +284,9 @@ export default function Protocolos({ usuario }) {
   const [statusList, setStatusList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
+
+  // Ver relatório financeiro
+  const [verRelatorioFinanceiro, setVerRelatorioFinanceiro] = useState(false);
 
   // filtros
   const [q, setQ] = useState('');
@@ -67,6 +304,8 @@ export default function Protocolos({ usuario }) {
     data_entrada: todayISO(),
     observacoes: '',
     status: 'andamento',
+    tem_orcamento: false,
+    orcamento_valor: '',
   });
 
   // modal adicionar serviço
@@ -85,11 +324,10 @@ export default function Protocolos({ usuario }) {
   const [abaSelecionada, setAbaSelecionada] = useState('notas');
   const [loadingNotas, setLoadingNotas] = useState(false);
 
-  // ✅ Alertas manuais (Supervisor)
+  // Alertas manuais (Supervisor)
   const [enviandoAlertas, setEnviandoAlertas] = useState(false);
   const [resultadoAlertas, setResultadoAlertas] = useState(null);
 
-  // ✅ Buscar setor do responsável selecionado
   const setorResponsavel = useMemo(() => {
     const id = Number(form.responsavel_id);
     if (!id) return '';
@@ -146,6 +384,8 @@ export default function Protocolos({ usuario }) {
       data_entrada: todayISO(),
       observacoes: '',
       status: 'andamento',
+      tem_orcamento: false,
+      orcamento_valor: '',
     });
     setModalOpen(true);
   };
@@ -159,6 +399,8 @@ export default function Protocolos({ usuario }) {
       data_entrada: String(p.data_entrada).slice(0, 10),
       observacoes: p.observacoes || '',
       status: p.status || 'andamento',
+      tem_orcamento: !!p.tem_orcamento,
+      orcamento_valor: p.orcamento_valor ? String(p.orcamento_valor) : '',
     });
     setModalOpen(true);
   };
@@ -179,11 +421,17 @@ export default function Protocolos({ usuario }) {
         throw new Error('Preencha: número, serviço, responsável e data de entrada');
       }
 
+      if (form.tem_orcamento && (!form.orcamento_valor || parseFloat(form.orcamento_valor) <= 0)) {
+        throw new Error('Informe o valor do orçamento');
+      }
+
       if (editId) {
         await updateProtocolo(editId, {
           responsavel_id: Number(form.responsavel_id),
           observacoes: form.observacoes,
           status: form.status,
+          tem_orcamento: form.tem_orcamento,
+          orcamento_valor: form.tem_orcamento ? parseFloat(form.orcamento_valor) : null,
         });
       } else {
         await createProtocolo({
@@ -192,6 +440,8 @@ export default function Protocolos({ usuario }) {
           responsavel_id: Number(form.responsavel_id),
           data_entrada: form.data_entrada,
           observacoes: form.observacoes,
+          tem_orcamento: form.tem_orcamento,
+          orcamento_valor: form.tem_orcamento ? parseFloat(form.orcamento_valor) : null,
         });
       }
 
@@ -317,31 +567,20 @@ export default function Protocolos({ usuario }) {
     }
   };
 
-  // ✅ Função para enviar alertas manualmente (SUPERVISOR)
   const enviarAlertasManual = async () => {
     if (!window.confirm('Deseja enviar alertas de vencimento agora?')) return;
-    
     setEnviandoAlertas(true);
     setResultadoAlertas(null);
     setErro('');
-
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/alertas/verificar-vencimentos`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
-
-      if (!response.ok) {
-        throw new Error('Erro ao enviar alertas');
-      }
-
+      if (!response.ok) throw new Error('Erro ao enviar alertas');
       const resultado = await response.json();
       setResultadoAlertas(resultado);
-
       if (resultado.total === 0) {
         alert('✅ Nenhum protocolo vencendo no momento.');
       } else {
@@ -349,18 +588,27 @@ export default function Protocolos({ usuario }) {
       }
     } catch (e) {
       setErro(e?.message || 'Erro ao enviar alertas');
-      alert('❌ Erro ao enviar alertas: ' + (e?.message || 'Erro desconhecido'));
     } finally {
       setEnviandoAlertas(false);
     }
   };
 
+  // Mostrar relatório financeiro
+  if (verRelatorioFinanceiro) {
+    return (
+      <RelatorioFinanceiro
+        funcionarios={funcionarios}
+        onVoltar={() => setVerRelatorioFinanceiro(false)}
+      />
+    );
+  }
+
   return (
     <div className="protocolos-container">
       <div className="protocolos-header">
-       <h1 className="protocolos-title">Protocolos</h1>
-       <p className="protocolos-subtitle">Cadastro, acompanhamento e conclusão de protocolos.</p>
-    </div>
+        <h1 className="protocolos-title">Protocolos</h1>
+        <p className="protocolos-subtitle">Cadastro, acompanhamento e conclusão de protocolos.</p>
+      </div>
 
       {erro && <div className="alert-moderno alert-error-moderno">⚠️ {erro}</div>}
 
@@ -394,21 +642,31 @@ export default function Protocolos({ usuario }) {
               ))}
             </select>
 
-            {/* ✅ BOTÃO DE ALERTAS - SÓ PARA SUPERVISOR */}
+            {/* Botão Relatório Financeiro - Supervisor e Coordenador */}
+            {(usuario?.cargo === 'Supervisor' || usuario?.cargo === 'Coordenador') && (
+              <button
+                className="btn-moderno btn-primary-moderno"
+                onClick={() => setVerRelatorioFinanceiro(true)}
+                title="Relatório financeiro de orçamentos"
+              >
+                💰 Financeiro
+              </button>
+            )}
+
+            {/* Botão Alertas - Supervisor */}
             {usuario?.cargo === 'Supervisor' && (
-              <button 
-                className="btn-moderno btn-warning-moderno" 
+              <button
+                className="btn-moderno btn-warning-moderno"
                 onClick={enviarAlertasManual}
                 disabled={enviandoAlertas}
-                title="Enviar alertas de vencimento para o n8n"
-               
+                title="Enviar alertas de vencimento"
               >
                 {enviandoAlertas ? '⏳ Enviando...' : '🔔 Enviar Alertas'}
               </button>
             )}
 
             <button className="btn-moderno btn-success-moderno" onClick={abrirNovo}>
-  ➕ Novo Protocolo
+              ➕ Novo Protocolo
             </button>
           </div>
         </div>
@@ -423,16 +681,17 @@ export default function Protocolos({ usuario }) {
                 <th>Responsável</th>
                 <th>Data Entrada</th>
                 <th>Vencimento</th>
+                <th>Orçamento</th>
                 <th>Status</th>
                 <th>Ações</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan="8" style={{ textAlign: 'center' }}>Carregando...</td></tr>
+                <tr><td colSpan="9" style={{ textAlign: 'center' }}>Carregando...</td></tr>
               )}
               {!loading && filtrados.length === 0 && (
-                <tr><td colSpan="8" style={{ textAlign: 'center' }}>Nenhum protocolo encontrado</td></tr>
+                <tr><td colSpan="9" style={{ textAlign: 'center' }}>Nenhum protocolo encontrado</td></tr>
               )}
               {!loading && filtrados.map((p) => (
                 <tr key={p.id}>
@@ -442,19 +701,29 @@ export default function Protocolos({ usuario }) {
                   <td>{p.responsavel_nome}</td>
                   <td>{String(p.data_entrada).slice(0, 10)}</td>
                   <td>{String(p.data_vencimento).slice(0, 10)}</td>
+                  <td>
+                    {p.tem_orcamento ? (
+                      <span style={{ color: '#059669', fontWeight: 600 }}>
+                        {formatMoeda(p.orcamento_valor)}
+                        {p.orcamento_pago && ' ✅'}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#9ca3af' }}>-</span>
+                    )}
+                  </td>
                   <td><span className={statusBadgeClass(p.status)}>{statusLabel(p.status)}</span></td>
                   <td>
                     <div className="acoes-container">
                       <button className="btn-action btn-action-edit" onClick={() => abrirEdicao(p)} title="Editar">✏️</button>
-                        {p.status === 'andamento' && (
-    <>
-                      <button className="btn-action btn-action-edit" onClick={() => abrirModalServico(p)} title="Adicionar Serviço">+</button>
-                      <button className="btn-action btn-action-success" onClick={() => concluir(p.id)} title="Concluir">✓</button>
-    </>
-  )}
-  <button className="btn-action btn-action-edit" onClick={() => abrirModalNotas(p)} title="Notas">📝</button>
-  <button className="btn-action btn-action-delete" onClick={() => excluir(p.id)} title="Excluir">🗑️</button>
-</div>
+                      {p.status === 'andamento' && (
+                        <>
+                          <button className="btn-action btn-action-edit" onClick={() => abrirModalServico(p)} title="Adicionar Serviço">+</button>
+                          <button className="btn-action btn-action-success" onClick={() => concluir(p.id)} title="Concluir">✓</button>
+                        </>
+                      )}
+                      <button className="btn-action btn-action-edit" onClick={() => abrirModalNotas(p)} title="Notas">📝</button>
+                      <button className="btn-action btn-action-delete" onClick={() => excluir(p.id)} title="Excluir">🗑️</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -463,7 +732,7 @@ export default function Protocolos({ usuario }) {
         </div>
       </div>
 
-      {/* Modal Novo/Editar */}
+      {/* ===== Modal Novo/Editar ===== */}
       {modalOpen && (
         <div className="modal-overlay" onClick={fecharModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -534,7 +803,6 @@ export default function Protocolos({ usuario }) {
                 </select>
               </div>
 
-              {/* ✅ Mostrar setor automaticamente baseado no responsável */}
               {setorResponsavel && (
                 <div className="info-box" style={{ background: '#f0f9ff', border: '1px solid #bae6fd', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem' }}>
                   <strong>Setor:</strong> {setorResponsavel}
@@ -552,6 +820,43 @@ export default function Protocolos({ usuario }) {
                   placeholder="Detalhes do protocolo..."
                 />
               </div>
+
+              {/* ===== CAMPO ORÇAMENTO ===== */}
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.tem_orcamento}
+                    onChange={(e) => setForm({ ...form, tem_orcamento: e.target.checked, orcamento_valor: '' })}
+                    style={{ width: '16px', height: '16px' }}
+                  />
+                  <span style={{ fontWeight: 600 }}>💰 Possui Orçamento</span>
+                </label>
+              </div>
+
+              {form.tem_orcamento && (
+                <div className="form-group" style={{ animation: 'fadeIn 0.2s ease' }}>
+                  <label htmlFor="orcamento_valor">Valor do Orçamento (R$)</label>
+                  <input
+                    type="number"
+                    id="orcamento_valor"
+                    className="form-input"
+                    value={form.orcamento_valor}
+                    onChange={(e) => setForm({ ...form, orcamento_valor: e.target.value })}
+                    placeholder="Ex: 1500.00"
+                    min="0.01"
+                    step="0.01"
+                    required={form.tem_orcamento}
+                    style={{ borderColor: '#10b981' }}
+                  />
+                  {form.orcamento_valor && (
+                    <small style={{ color: '#059669', marginTop: '0.25rem', display: 'block' }}>
+                      {formatMoeda(parseFloat(form.orcamento_valor))}
+                    </small>
+                  )}
+                </div>
+              )}
+              {/* ===== FIM ORÇAMENTO ===== */}
 
               {editId && (
                 <div className="form-group">
@@ -585,7 +890,6 @@ export default function Protocolos({ usuario }) {
         <div className="modal-overlay" onClick={fecharModalServico}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>Adicionar serviço ao protocolo {protocoloSel.numero}</h2>
-            
             <form onSubmit={salvarServico}>
               <div className="form-group">
                 <label htmlFor="servico-add">Serviço</label>
@@ -622,7 +926,7 @@ export default function Protocolos({ usuario }) {
                   {' '}Renovar prazo (recalcular vencimento)
                 </label>
                 <small style={{ display: 'block', marginTop: '0.25rem', color: '#666' }}>
-                  Se desmarcado, mantém o prazo atual (mas pode ficar apertado).
+                  Se desmarcado, mantém o prazo atual.
                 </small>
               </div>
 
@@ -651,27 +955,13 @@ export default function Protocolos({ usuario }) {
             
             <div style={{ display: 'flex', gap: '1rem', borderBottom: '2px solid #e0e0e0', marginBottom: '1rem' }}>
               <button
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: '0.75rem 1rem',
-                  cursor: 'pointer',
-                  fontWeight: abaSelecionada === 'notas' ? 'bold' : 'normal',
-                  borderBottom: abaSelecionada === 'notas' ? '3px solid #16a34a' : '3px solid transparent',
-                }}
+                style={{ background: 'none', border: 'none', padding: '0.75rem 1rem', cursor: 'pointer', fontWeight: abaSelecionada === 'notas' ? 'bold' : 'normal', borderBottom: abaSelecionada === 'notas' ? '3px solid #16a34a' : '3px solid transparent' }}
                 onClick={() => setAbaSelecionada('notas')}
               >
                 📝 Notas ({notas.length})
               </button>
               <button
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: '0.75rem 1rem',
-                  cursor: 'pointer',
-                  fontWeight: abaSelecionada === 'historico' ? 'bold' : 'normal',
-                  borderBottom: abaSelecionada === 'historico' ? '3px solid #16a34a' : '3px solid transparent',
-                }}
+                style={{ background: 'none', border: 'none', padding: '0.75rem 1rem', cursor: 'pointer', fontWeight: abaSelecionada === 'historico' ? 'bold' : 'normal', borderBottom: abaSelecionada === 'historico' ? '3px solid #16a34a' : '3px solid transparent' }}
                 onClick={() => setAbaSelecionada('historico')}
               >
                 📜 Histórico ({historico.length})
@@ -701,27 +991,13 @@ export default function Protocolos({ usuario }) {
 
                 <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                   {notas.length === 0 && (
-                    <p style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>
-                      Nenhuma nota ainda. Adicione a primeira!
-                    </p>
+                    <p style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>Nenhuma nota ainda.</p>
                   )}
                   {notas.map((nota) => (
-                    <div
-                      key={nota.id}
-                      style={{
-                        background: '#f9fafb',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                        padding: '1rem',
-                        marginBottom: '0.75rem',
-                      }}
-                    >
+                    <div key={nota.id} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1rem', marginBottom: '0.75rem' }}>
                       <div style={{ marginBottom: '0.5rem' }}>
-                        <strong>{nota.usuario_nome || 'Usuário'}</strong>
-                        {' '}
-                        <span style={{ color: '#666', fontSize: '0.85rem' }}>
-                          ({nota.usuario_setor || nota.usuario_cargo || 'Cargo'})
-                        </span>
+                        <strong>{nota.usuario_nome || 'Usuário'}</strong>{' '}
+                        <span style={{ color: '#666', fontSize: '0.85rem' }}>({nota.usuario_setor || nota.usuario_cargo || 'Cargo'})</span>
                         <br />
                         <small style={{ color: '#999' }}>{formatDateTime(nota.created_at)}</small>
                       </div>
@@ -735,22 +1011,10 @@ export default function Protocolos({ usuario }) {
             {!loadingNotas && abaSelecionada === 'historico' && (
               <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
                 {historico.length === 0 && (
-                  <p style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>
-                    Nenhum registro no histórico
-                  </p>
+                  <p style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>Nenhum registro no histórico</p>
                 )}
                 {historico.map((h) => (
-                  <div
-                    key={h.id}
-                    style={{
-                      background: '#fefefe',
-                      border: '1px solid #e5e7eb',
-                      borderLeft: '4px solid #16a34a',
-                      borderRadius: '4px',
-                      padding: '1rem',
-                      marginBottom: '0.75rem',
-                    }}
-                  >
+                  <div key={h.id} style={{ background: '#fefefe', border: '1px solid #e5e7eb', borderLeft: '4px solid #16a34a', borderRadius: '4px', padding: '1rem', marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                       <strong style={{ color: '#16a34a' }}>{h.acao}</strong>
                       <small style={{ color: '#999' }}>{formatDateTime(h.created_at)}</small>
@@ -767,9 +1031,7 @@ export default function Protocolos({ usuario }) {
             )}
 
             <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
-              <button type="button" className="btn btn-secondary" onClick={fecharModalNotas}>
-                Fechar
-              </button>
+              <button type="button" className="btn btn-secondary" onClick={fecharModalNotas}>Fechar</button>
             </div>
           </div>
         </div>

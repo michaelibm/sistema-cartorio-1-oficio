@@ -49,7 +49,6 @@ router.get('/', authMiddleware, async (req, res) => {
     const params = [];
     let paramCount = 1;
 
-    // Auxiliar só vê seus próprios protocolos
     if (req.user.cargo === 'Auxiliar') {
       query += ` AND p.responsavel_id = $${paramCount}`;
       params.push(req.user.id);
@@ -78,7 +77,7 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// Buscar protocolo por ID (com notas e histórico)
+// Buscar protocolo por ID
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -95,7 +94,6 @@ router.get('/:id', authMiddleware, async (req, res) => {
     
     const params = [id];
     
-    // Auxiliar só pode ver seus próprios protocolos
     if (req.user.cargo === 'Auxiliar') {
       query += ' AND p.responsavel_id = $2';
       params.push(req.user.id);
@@ -109,7 +107,6 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
     const protocolo = result.rows[0];
 
-    // Buscar notas do protocolo
     const notasResult = await pool.query(`
       SELECT n.*, u.nome as usuario_nome, u.cargo as usuario_cargo, u.setor as usuario_setor
       FROM protocolo_notas n
@@ -118,7 +115,6 @@ router.get('/:id', authMiddleware, async (req, res) => {
       ORDER BY n.created_at DESC
     `, [id]);
 
-    // Buscar histórico do protocolo
     const historicoResult = await pool.query(`
       SELECT h.*, u.nome as usuario_nome, u.email as usuario_email, 
              u.cargo as usuario_cargo, u.setor as usuario_setor
@@ -141,13 +137,12 @@ router.get('/:id', authMiddleware, async (req, res) => {
 // Criar novo protocolo
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { numero, servico_id, responsavel_id, data_entrada, observacoes } = req.body;
+    const { numero, servico_id, responsavel_id, data_entrada, observacoes, tem_orcamento, orcamento_valor } = req.body;
 
     if (!numero || !servico_id || !responsavel_id || !data_entrada) {
       return res.status(400).json({ message: 'Campos obrigatórios faltando' });
     }
 
-    // Auxiliar só pode criar protocolos para si mesmo
     if (req.user.cargo === 'Auxiliar' && responsavel_id != req.user.id) {
       return res.status(403).json({ message: 'Você só pode criar protocolos para si mesmo' });
     }
@@ -165,20 +160,22 @@ router.post('/', authMiddleware, async (req, res) => {
     const servico = servicoResult.rows[0];
     const data_vencimento = await calcularDataVencimento(data_entrada, servico.prazo, servico.tipo_prazo);
 
+    // Validar valor do orçamento
+    const valorOrcamento = (tem_orcamento && orcamento_valor) ? parseFloat(orcamento_valor) : null;
+
     const result = await pool.query(
-      `INSERT INTO protocolos (numero, servico_id, responsavel_id, data_entrada, data_vencimento, observacoes)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO protocolos (numero, servico_id, responsavel_id, data_entrada, data_vencimento, observacoes, tem_orcamento, orcamento_valor)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [numero, servico_id, responsavel_id, data_entrada, data_vencimento, observacoes]
+      [numero, servico_id, responsavel_id, data_entrada, data_vencimento, observacoes, !!tem_orcamento, valorOrcamento]
     );
 
-    // Buscar o setor do responsável para incluir no histórico
     const userResult = await pool.query('SELECT nome, setor FROM usuarios WHERE id = $1', [responsavel_id]);
     const userSetor = userResult.rows[0]?.setor;
 
     await pool.query(
       'INSERT INTO historico (protocolo_id, usuario_id, acao, descricao) VALUES ($1, $2, $3, $4)',
-      [result.rows[0].id, req.user.id, 'CRIACAO', `Protocolo criado por ${req.user.email}${userSetor ? ` - Setor: ${userSetor}` : ''}`]
+      [result.rows[0].id, req.user.id, 'CRIACAO', `Protocolo criado por ${req.user.email}${userSetor ? ` - Setor: ${userSetor}` : ''}${valorOrcamento ? ` - Orçamento: R$ ${valorOrcamento.toFixed(2)}` : ''}`]
     );
 
     res.status(201).json(result.rows[0]);
@@ -192,9 +189,8 @@ router.post('/', authMiddleware, async (req, res) => {
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { responsavel_id, observacoes, status } = req.body;
+    const { responsavel_id, observacoes, status, tem_orcamento, orcamento_valor, orcamento_pago } = req.body;
 
-    // Verificar permissões para Auxiliar
     if (req.user.cargo === 'Auxiliar') {
       const checkProtocolo = await pool.query('SELECT responsavel_id FROM protocolos WHERE id = $1', [id]);
       
@@ -236,6 +232,24 @@ router.put('/:id', authMiddleware, async (req, res) => {
       if (status === 'concluido') {
         updates.push(`data_conclusao = CURRENT_DATE`);
       }
+    }
+
+    if (tem_orcamento !== undefined) {
+      updates.push(`tem_orcamento = $${paramCount}`);
+      params.push(!!tem_orcamento);
+      paramCount++;
+    }
+
+    if (orcamento_valor !== undefined) {
+      updates.push(`orcamento_valor = $${paramCount}`);
+      params.push(orcamento_valor ? parseFloat(orcamento_valor) : null);
+      paramCount++;
+    }
+
+    if (orcamento_pago !== undefined) {
+      updates.push(`orcamento_pago = $${paramCount}`);
+      params.push(!!orcamento_pago);
+      paramCount++;
     }
 
     if (updates.length === 0) {
@@ -545,6 +559,100 @@ router.patch('/:id/concluir', authMiddleware, async (req, res) => {
   }
 });
 
+// ============================================================
+// RELATÓRIO FINANCEIRO
+// ============================================================
+router.get('/financeiro/relatorio', authMiddleware, async (req, res) => {
+  try {
+    // Somente Supervisor e Coordenador
+    if (req.user.cargo === 'Auxiliar') {
+      return res.status(403).json({ message: 'Sem permissão para acessar relatório financeiro' });
+    }
+
+    const { data_inicio, data_fim, responsavel_id, pago } = req.query;
+
+    let whereClause = 'WHERE p.tem_orcamento = true';
+    const params = [];
+    let paramCount = 1;
+
+    if (data_inicio) {
+      whereClause += ` AND p.data_entrada >= $${paramCount}`;
+      params.push(data_inicio);
+      paramCount++;
+    }
+
+    if (data_fim) {
+      whereClause += ` AND p.data_entrada <= $${paramCount}`;
+      params.push(data_fim);
+      paramCount++;
+    }
+
+    if (responsavel_id) {
+      whereClause += ` AND p.responsavel_id = $${paramCount}`;
+      params.push(responsavel_id);
+      paramCount++;
+    }
+
+    if (pago !== undefined && pago !== '') {
+      whereClause += ` AND p.orcamento_pago = $${paramCount}`;
+      params.push(pago === 'true');
+      paramCount++;
+    }
+
+    // Buscar protocolos com orçamento
+    const protocolos = await pool.query(`
+      SELECT 
+        p.id, p.numero, p.status, p.data_entrada, p.data_vencimento, p.data_conclusao,
+        p.tem_orcamento, p.orcamento_valor, p.orcamento_pago, p.observacoes,
+        s.nome as servico_nome,
+        u.nome as responsavel_nome, u.setor as responsavel_setor
+      FROM protocolos p
+      JOIN servicos s ON p.servico_id = s.id
+      JOIN usuarios u ON p.responsavel_id = u.id
+      ${whereClause}
+      ORDER BY p.data_entrada DESC
+    `, params);
+
+    // Totalizadores
+    const totais = await pool.query(`
+      SELECT
+        COUNT(*) as total_protocolos,
+        COALESCE(SUM(orcamento_valor), 0) as total_geral,
+        COALESCE(SUM(CASE WHEN orcamento_pago = true THEN orcamento_valor ELSE 0 END), 0) as total_recebido,
+        COALESCE(SUM(CASE WHEN orcamento_pago = false THEN orcamento_valor ELSE 0 END), 0) as total_a_receber,
+        COUNT(CASE WHEN orcamento_pago = true THEN 1 END) as qtd_pagos,
+        COUNT(CASE WHEN orcamento_pago = false THEN 1 END) as qtd_pendentes
+      FROM protocolos p
+      ${whereClause}
+    `, params);
+
+    // Totais por responsável
+    const porResponsavel = await pool.query(`
+      SELECT
+        u.nome as responsavel_nome,
+        u.setor as responsavel_setor,
+        COUNT(*) as total_protocolos,
+        COALESCE(SUM(p.orcamento_valor), 0) as total_valor,
+        COALESCE(SUM(CASE WHEN p.orcamento_pago = true THEN p.orcamento_valor ELSE 0 END), 0) as total_recebido,
+        COALESCE(SUM(CASE WHEN p.orcamento_pago = false THEN p.orcamento_valor ELSE 0 END), 0) as total_pendente
+      FROM protocolos p
+      JOIN usuarios u ON p.responsavel_id = u.id
+      ${whereClause}
+      GROUP BY u.id, u.nome, u.setor
+      ORDER BY total_valor DESC
+    `, params);
+
+    res.json({
+      protocolos: protocolos.rows,
+      totais: totais.rows[0],
+      por_responsavel: porResponsavel.rows,
+    });
+  } catch (error) {
+    console.error('Erro ao gerar relatório financeiro:', error);
+    res.status(500).json({ message: 'Erro ao gerar relatório financeiro' });
+  }
+});
+
 // Dashboard
 router.get('/dashboard/stats', authMiddleware, async (req, res) => {
   try {
@@ -564,7 +672,8 @@ router.get('/dashboard/stats', authMiddleware, async (req, res) => {
           EXTRACT(YEAR FROM data_conclusao) = EXTRACT(YEAR FROM CURRENT_DATE)
         ) as concluidos_mes,
         COUNT(*) FILTER (WHERE status = 'andamento' AND data_vencimento < CURRENT_DATE) as atrasados,
-        COUNT(*) FILTER (WHERE status = 'andamento' AND data_vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE + 3) as vencendo
+        COUNT(*) FILTER (WHERE status = 'andamento' AND data_vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE + 3) as vencendo,
+        COALESCE(SUM(orcamento_valor) FILTER (WHERE tem_orcamento = true AND orcamento_pago = false), 0) as valor_a_receber
       FROM protocolos
       ${whereClause}
     `, params);
