@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import { API_URL } from "../services/api";
 
-import './Protocolos.css';
+import "./Protocolos.css";
 import {
   addServicoAoProtocolo,
   concluirProtocolo,
@@ -14,30 +14,38 @@ import {
   addNota,
   getNotas,
   getHistorico,
-} from '../services/api';
+} from "../services/api";
 
 const statusLabel = (s) => {
-  if (s === 'andamento') return 'Em andamento';
-  if (s === 'concluido') return 'Concluído';
-  if (s === 'cancelado') return 'Cancelado';
+  if (s === "andamento") return "Em andamento";
+  if (s === "concluido") return "Concluído";
+  if (s === "cancelado") return "Cancelado";
   return s;
 };
 
 const statusBadgeClass = (s) => {
-  if (s === 'concluido') return 'badge-moderno badge-success-moderno';
-  if (s === 'cancelado') return 'badge-moderno badge-danger-moderno';
-  return 'badge-moderno badge-info-moderno';
+  if (s === "concluido") return "badge-moderno badge-success-moderno";
+  if (s === "cancelado") return "badge-moderno badge-danger-moderno";
+  return "badge-moderno badge-info-moderno";
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 // Navega para o próximo campo ao pressionar Enter
 const handleEnterKey = (e) => {
-  if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.type !== 'submit') {
+  if (
+    e.key === "Enter" &&
+    e.target.tagName !== "TEXTAREA" &&
+    e.target.type !== "submit"
+  ) {
     e.preventDefault();
-    const form = e.target.closest('form');
+    const form = e.target.closest("form");
     if (!form) return;
-    const fields = Array.from(form.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled])'));
+    const fields = Array.from(
+      form.querySelectorAll(
+        "input:not([disabled]), select:not([disabled]), textarea:not([disabled])"
+      )
+    );
     const idx = fields.indexOf(e.target);
     if (idx >= 0 && idx < fields.length - 1) {
       fields[idx + 1].focus();
@@ -46,14 +54,17 @@ const handleEnterKey = (e) => {
 };
 
 const formatDateTime = (dt) => {
-  if (!dt) return '';
+  if (!dt) return "";
   const d = new Date(dt);
-  return d.toLocaleString('pt-BR');
+  return d.toLocaleString("pt-BR");
 };
 
 const formatMoeda = (valor) => {
-  if (!valor && valor !== 0) return '-';
-  return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  if (!valor && valor !== 0) return "-";
+  return Number(valor).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 };
 
 // ============================================================
@@ -62,25 +73,30 @@ const formatMoeda = (valor) => {
 function RelatorioFinanceiro({ funcionarios, onVoltar }) {
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState('');
+  const [erro, setErro] = useState("");
   const [filtros, setFiltros] = useState({
-    data_inicio: '',
-    data_fim: '',
-    responsavel_id: '',
-    pago: '',
+    data_inicio: "",
+    data_fim: "",
+    responsavel_id: "",
+    pago: "",
   });
 
   const carregar = async () => {
     setLoading(true);
-    setErro('');
+    setErro("");
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const params = new URLSearchParams();
-      Object.entries(filtros).forEach(([k, v]) => { if (v !== '') params.append(k, v); });
-      const resp = await fetch(`${API_URL}/protocolos/financeiro/relatorio?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      Object.entries(filtros).forEach(([k, v]) => {
+        if (v !== "") params.append(k, v);
       });
-      if (!resp.ok) throw new Error('Erro ao carregar relatório');
+      const resp = await fetch(
+        `${API_URL}/protocolos/financeiro/relatorio?${params}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      if (!resp.ok) throw new Error("Erro ao carregar relatório");
       const json = await resp.json();
       setDados(json);
     } catch (e) {
@@ -90,14 +106,19 @@ function RelatorioFinanceiro({ funcionarios, onVoltar }) {
     }
   };
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => {
+    carregar();
+  }, []);
 
   const marcarPago = async (protocoloId, pago) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       await fetch(`${API_URL}/protocolos/${protocoloId}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ orcamento_pago: pago }),
       });
       await carregar();
@@ -108,18 +129,25 @@ function RelatorioFinanceiro({ funcionarios, onVoltar }) {
 
   return (
     <div className="protocolos-container">
-      <div className="protocolos-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <button className="btn-action btn-action-edit" onClick={onVoltar}>← Voltar</button>
+      <div
+        className="protocolos-header"
+        style={{ display: "flex", alignItems: "center", gap: "1rem" }}
+      >
+        <button className="btn-action btn-action-edit" onClick={onVoltar}>
+          ← Voltar
+        </button>
         <div>
           <h1 className="protocolos-title">💰 Relatório Financeiro</h1>
           <p className="protocolos-subtitle">Orçamentos e valores a receber</p>
         </div>
       </div>
 
-      {erro && <div className="alert-moderno alert-error-moderno">⚠️ {erro}</div>}
+      {erro && (
+        <div className="alert-moderno alert-error-moderno">⚠️ {erro}</div>
+      )}
 
       {/* Filtros */}
-      <div className="protocolos-card" style={{ marginBottom: '1.5rem' }}>
+      <div className="protocolos-card" style={{ marginBottom: "1.5rem" }}>
         <div className="card-header-protocolos">
           <h2 className="card-title-protocolos">Filtros</h2>
           <div className="filtros-area">
@@ -128,23 +156,31 @@ function RelatorioFinanceiro({ funcionarios, onVoltar }) {
               className="input-moderno"
               title="Data início"
               value={filtros.data_inicio}
-              onChange={(e) => setFiltros({ ...filtros, data_inicio: e.target.value })}
+              onChange={(e) =>
+                setFiltros({ ...filtros, data_inicio: e.target.value })
+              }
             />
             <input
               type="date"
               className="input-moderno"
               title="Data fim"
               value={filtros.data_fim}
-              onChange={(e) => setFiltros({ ...filtros, data_fim: e.target.value })}
+              onChange={(e) =>
+                setFiltros({ ...filtros, data_fim: e.target.value })
+              }
             />
             <select
               className="select-moderno"
               value={filtros.responsavel_id}
-              onChange={(e) => setFiltros({ ...filtros, responsavel_id: e.target.value })}
+              onChange={(e) =>
+                setFiltros({ ...filtros, responsavel_id: e.target.value })
+              }
             >
               <option value="">Todos responsáveis</option>
               {funcionarios.map((f) => (
-                <option key={f.id} value={f.id}>{f.nome}</option>
+                <option key={f.id} value={f.id}>
+                  {f.nome}
+                </option>
               ))}
             </select>
             <select
@@ -156,39 +192,137 @@ function RelatorioFinanceiro({ funcionarios, onVoltar }) {
               <option value="false">Pendentes</option>
               <option value="true">Pagos</option>
             </select>
-            <button className="btn-moderno btn-primary-moderno" onClick={carregar}>
+            <button
+              className="btn-moderno btn-primary-moderno"
+              onClick={carregar}
+            >
               🔍 Filtrar
             </button>
           </div>
         </div>
       </div>
 
-      {loading && <div style={{ textAlign: 'center', padding: '3rem', color: '#666' }}>Carregando...</div>}
+      {loading && (
+        <div style={{ textAlign: "center", padding: "3rem", color: "#666" }}>
+          Carregando...
+        </div>
+      )}
 
       {!loading && dados && (
         <>
           {/* Cards de totais */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-            <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', borderLeft: '4px solid #3b82f6' }}>
-              <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Total Geral</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1f2937', marginTop: '0.25rem' }}>{formatMoeda(dados.totais.total_geral)}</div>
-              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>{dados.totais.total_protocolos} protocolo(s)</div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "1rem",
+              marginBottom: "1.5rem",
+            }}
+          >
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: "12px",
+                padding: "1.25rem",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                borderLeft: "4px solid #3b82f6",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "0.8rem",
+                  color: "#6b7280",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                }}
+              >
+                Total Geral
+              </div>
+              <div
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: 700,
+                  color: "#1f2937",
+                  marginTop: "0.25rem",
+                }}
+              >
+                {formatMoeda(dados.totais.total_geral)}
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                {dados.totais.total_protocolos} protocolo(s)
+              </div>
             </div>
-            <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', borderLeft: '4px solid #f59e0b' }}>
-              <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>A Receber</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#d97706', marginTop: '0.25rem' }}>{formatMoeda(dados.totais.total_a_receber)}</div>
-              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>{dados.totais.qtd_pendentes} pendente(s)</div>
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: "12px",
+                padding: "1.25rem",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                borderLeft: "4px solid #f59e0b",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "0.8rem",
+                  color: "#6b7280",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                }}
+              >
+                A Receber
+              </div>
+              <div
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: 700,
+                  color: "#d97706",
+                  marginTop: "0.25rem",
+                }}
+              >
+                {formatMoeda(dados.totais.total_a_receber)}
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                {dados.totais.qtd_pendentes} pendente(s)
+              </div>
             </div>
-            <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', borderLeft: '4px solid #10b981' }}>
-              <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Recebido</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#059669', marginTop: '0.25rem' }}>{formatMoeda(dados.totais.total_recebido)}</div>
-              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>{dados.totais.qtd_pagos} pago(s)</div>
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: "12px",
+                padding: "1.25rem",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                borderLeft: "4px solid #10b981",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "0.8rem",
+                  color: "#6b7280",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                }}
+              >
+                Recebido
+              </div>
+              <div
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: 700,
+                  color: "#059669",
+                  marginTop: "0.25rem",
+                }}
+              >
+                {formatMoeda(dados.totais.total_recebido)}
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                {dados.totais.qtd_pagos} pago(s)
+              </div>
             </div>
           </div>
 
           {/* Por responsável */}
           {dados.por_responsavel.length > 0 && (
-            <div className="protocolos-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="protocolos-card" style={{ marginBottom: "1.5rem" }}>
               <div className="card-header-protocolos">
                 <h2 className="card-title-protocolos">Por Responsável</h2>
               </div>
@@ -207,12 +341,20 @@ function RelatorioFinanceiro({ funcionarios, onVoltar }) {
                   <tbody>
                     {dados.por_responsavel.map((r, i) => (
                       <tr key={i}>
-                        <td><strong>{r.responsavel_nome}</strong></td>
-                        <td>{r.responsavel_setor || '-'}</td>
+                        <td>
+                          <strong>{r.responsavel_nome}</strong>
+                        </td>
+                        <td>{r.responsavel_setor || "-"}</td>
                         <td>{r.total_protocolos}</td>
-                        <td><strong>{formatMoeda(r.total_valor)}</strong></td>
-                        <td style={{ color: '#059669' }}>{formatMoeda(r.total_recebido)}</td>
-                        <td style={{ color: '#d97706' }}>{formatMoeda(r.total_pendente)}</td>
+                        <td>
+                          <strong>{formatMoeda(r.total_valor)}</strong>
+                        </td>
+                        <td style={{ color: "#059669" }}>
+                          {formatMoeda(r.total_recebido)}
+                        </td>
+                        <td style={{ color: "#d97706" }}>
+                          {formatMoeda(r.total_pendente)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -224,7 +366,9 @@ function RelatorioFinanceiro({ funcionarios, onVoltar }) {
           {/* Lista de protocolos */}
           <div className="protocolos-card">
             <div className="card-header-protocolos">
-              <h2 className="card-title-protocolos">Protocolos com Orçamento</h2>
+              <h2 className="card-title-protocolos">
+                Protocolos com Orçamento
+              </h2>
             </div>
             <div className="table-container">
               <table className="table-moderno">
@@ -242,19 +386,39 @@ function RelatorioFinanceiro({ funcionarios, onVoltar }) {
                 </thead>
                 <tbody>
                   {dados.protocolos.length === 0 && (
-                    <tr><td colSpan="8" style={{ textAlign: 'center' }}>Nenhum protocolo com orçamento encontrado</td></tr>
+                    <tr>
+                      <td colSpan="8" style={{ textAlign: "center" }}>
+                        Nenhum protocolo com orçamento encontrado
+                      </td>
+                    </tr>
                   )}
                   {dados.protocolos.map((p) => (
                     <tr key={p.id}>
-                      <td><strong>{p.numero}</strong></td>
+                      <td>
+                        <strong>{p.numero}</strong>
+                      </td>
                       <td>{p.servico_nome}</td>
                       <td>{p.responsavel_nome}</td>
                       <td>{String(p.data_entrada).slice(0, 10)}</td>
-                      <td><span className={statusBadgeClass(p.status)}>{statusLabel(p.status)}</span></td>
-                      <td><strong style={{ color: '#1f2937' }}>{formatMoeda(p.orcamento_valor)}</strong></td>
                       <td>
-                        <span className={`badge-moderno ${p.orcamento_pago ? 'badge-success-moderno' : 'badge-warning-moderno'}`}>
-                          {p.orcamento_pago ? '✅ Pago' : '⏳ Pendente'}
+                        <span className={statusBadgeClass(p.status)}>
+                          {statusLabel(p.status)}
+                        </span>
+                      </td>
+                      <td>
+                        <strong style={{ color: "#1f2937" }}>
+                          {formatMoeda(p.orcamento_valor)}
+                        </strong>
+                      </td>
+                      <td>
+                        <span
+                          className={`badge-moderno ${
+                            p.orcamento_pago
+                              ? "badge-success-moderno"
+                              : "badge-warning-moderno"
+                          }`}
+                        >
+                          {p.orcamento_pago ? "✅ Pago" : "⏳ Pendente"}
                         </span>
                       </td>
                       <td>
@@ -297,35 +461,35 @@ export default function Protocolos({ usuario }) {
   const [funcionarios, setFuncionarios] = useState([]);
   const [statusList, setStatusList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState('');
+  const [erro, setErro] = useState("");
 
   // Ver relatório financeiro
   const [verRelatorioFinanceiro, setVerRelatorioFinanceiro] = useState(false);
 
   // filtros
-  const [q, setQ] = useState('');
-  const [fStatus, setFStatus] = useState('');
-  const [fResp, setFResp] = useState('');
+  const [q, setQ] = useState("");
+  const [fStatus, setFStatus] = useState("");
+  const [fResp, setFResp] = useState("");
 
   // modal novo/editar
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    numero: '',
-    servico_id: '',
-    responsavel_id: '',
+    numero: "",
+    servico_id: "",
+    responsavel_id: "",
     data_entrada: todayISO(),
-    observacoes: '',
-    status: 'andamento',
+    observacoes: "",
+    status: "andamento",
     tem_orcamento: false,
-    orcamento_valor: '',
+    orcamento_valor: "",
   });
 
   // modal adicionar serviço
   const [modalServicoOpen, setModalServicoOpen] = useState(false);
   const [protocoloSel, setProtocoloSel] = useState(null);
-  const [servicoSel, setServicoSel] = useState('');
+  const [servicoSel, setServicoSel] = useState("");
   const [renovarPrazo, setRenovarPrazo] = useState(true);
   const [servicoResp, setServicoResp] = useState(null);
 
@@ -334,8 +498,8 @@ export default function Protocolos({ usuario }) {
   const [protocoloNotasSel, setProtocoloNotasSel] = useState(null);
   const [notas, setNotas] = useState([]);
   const [historico, setHistorico] = useState([]);
-  const [novaNota, setNovaNota] = useState('');
-  const [abaSelecionada, setAbaSelecionada] = useState('notas');
+  const [novaNota, setNovaNota] = useState("");
+  const [abaSelecionada, setAbaSelecionada] = useState("notas");
   const [loadingNotas, setLoadingNotas] = useState(false);
 
   // Alertas manuais (Supervisor)
@@ -344,30 +508,33 @@ export default function Protocolos({ usuario }) {
 
   const setorResponsavel = useMemo(() => {
     const id = Number(form.responsavel_id);
-    if (!id) return '';
+    if (!id) return "";
     const func = funcionarios.find((f) => Number(f.id) === id);
-    return func?.setor || '';
+    return func?.setor || "";
   }, [funcionarios, form.responsavel_id]);
 
   const carregar = async () => {
     setLoading(true);
-    setErro('');
+    setErro("");
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const [p, s, f, st] = await Promise.all([
-        getProtocolos({ status: fStatus || undefined, responsavel_id: fResp || undefined }),
+        getProtocolos({
+          status: fStatus || undefined,
+          responsavel_id: fResp || undefined,
+        }),
         getServicos(),
         getFuncionarios(),
         fetch(`${API_URL}/status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).then(r => r.json())
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json()),
       ]);
       setItens(Array.isArray(p) ? p : []);
       setServicos(Array.isArray(s) ? s : []);
       setFuncionarios(Array.isArray(f) ? f : []);
       setStatusList(Array.isArray(st) ? st : []);
     } catch (e) {
-      setErro(e?.message || 'Erro ao carregar protocolos');
+      setErro(e?.message || "Erro ao carregar protocolos");
     } finally {
       setLoading(false);
     }
@@ -381,25 +548,34 @@ export default function Protocolos({ usuario }) {
   const filtrados = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return itens;
-    return itens.filter((p) =>
-      String(p.numero || '').toLowerCase().includes(s) ||
-      String(p.servico_nome || '').toLowerCase().includes(s) ||
-      String(p.responsavel_nome || '').toLowerCase().includes(s) ||
-      String(p.responsavel_setor || '').toLowerCase().includes(s)
+    return itens.filter(
+      (p) =>
+        String(p.numero || "")
+          .toLowerCase()
+          .includes(s) ||
+        String(p.servico_nome || "")
+          .toLowerCase()
+          .includes(s) ||
+        String(p.responsavel_nome || "")
+          .toLowerCase()
+          .includes(s) ||
+        String(p.responsavel_setor || "")
+          .toLowerCase()
+          .includes(s)
     );
   }, [itens, q]);
 
   const abrirNovo = () => {
     setEditId(null);
     setForm({
-      numero: '',
-      servico_id: servicos?.[0]?.id ? String(servicos[0].id) : '',
-      responsavel_id: String(usuario?.id || ''),
+      numero: "",
+      servico_id: servicos?.[0]?.id ? String(servicos[0].id) : "",
+      responsavel_id: String(usuario?.id || ""),
       data_entrada: todayISO(),
-      observacoes: '',
-      status: 'andamento',
+      observacoes: "",
+      status: "andamento",
       tem_orcamento: false,
-      orcamento_valor: '',
+      orcamento_valor: "",
     });
     setModalOpen(true);
   };
@@ -407,14 +583,14 @@ export default function Protocolos({ usuario }) {
   const abrirEdicao = (p) => {
     setEditId(p.id);
     setForm({
-      numero: p.numero || '',
-      servico_id: String(p.servico_id || ''),
-      responsavel_id: String(p.responsavel_id || ''),
+      numero: p.numero || "",
+      servico_id: String(p.servico_id || ""),
+      responsavel_id: String(p.responsavel_id || ""),
       data_entrada: String(p.data_entrada).slice(0, 10),
-      observacoes: p.observacoes || '',
-      status: p.status || 'andamento',
+      observacoes: p.observacoes || "",
+      status: p.status || "andamento",
       tem_orcamento: !!p.tem_orcamento,
-      orcamento_valor: p.orcamento_valor ? String(p.orcamento_valor) : '',
+      orcamento_valor: p.orcamento_valor ? String(p.orcamento_valor) : "",
     });
     setModalOpen(true);
   };
@@ -423,20 +599,30 @@ export default function Protocolos({ usuario }) {
     setModalOpen(false);
     setEditId(null);
     setSaving(false);
-    setErro('');
+    setErro("");
   };
 
   const salvar = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setErro('');
+    setErro("");
     try {
-      if (!form.numero || !form.servico_id || !form.responsavel_id || !form.data_entrada) {
-        throw new Error('Preencha: número, serviço, responsável e data de entrada');
+      if (
+        !form.numero ||
+        !form.servico_id ||
+        !form.responsavel_id ||
+        !form.data_entrada
+      ) {
+        throw new Error(
+          "Preencha: número, serviço, responsável e data de entrada"
+        );
       }
 
-      if (form.tem_orcamento && (!form.orcamento_valor || parseFloat(form.orcamento_valor) <= 0)) {
-        throw new Error('Informe o valor do orçamento');
+      if (
+        form.tem_orcamento &&
+        (!form.orcamento_valor || parseFloat(form.orcamento_valor) <= 0)
+      ) {
+        throw new Error("Informe o valor do orçamento");
       }
 
       if (editId) {
@@ -445,7 +631,9 @@ export default function Protocolos({ usuario }) {
           observacoes: form.observacoes,
           status: form.status,
           tem_orcamento: form.tem_orcamento,
-          orcamento_valor: form.tem_orcamento ? parseFloat(form.orcamento_valor) : null,
+          orcamento_valor: form.tem_orcamento
+            ? parseFloat(form.orcamento_valor)
+            : null,
         });
       } else {
         await createProtocolo({
@@ -455,44 +643,49 @@ export default function Protocolos({ usuario }) {
           data_entrada: form.data_entrada,
           observacoes: form.observacoes,
           tem_orcamento: form.tem_orcamento,
-          orcamento_valor: form.tem_orcamento ? parseFloat(form.orcamento_valor) : null,
+          orcamento_valor: form.tem_orcamento
+            ? parseFloat(form.orcamento_valor)
+            : null,
         });
       }
 
       fecharModal();
       await carregar();
     } catch (e2) {
-      setErro(e2?.message || 'Erro ao salvar');
+      setErro(e2?.message || "Erro ao salvar");
     } finally {
       setSaving(false);
     }
   };
 
   const concluir = async (id) => {
-    if (!window.confirm('Concluir este protocolo?')) return;
-    setErro('');
+    if (!window.confirm("Concluir este protocolo?")) return;
+    setErro("");
     try {
       await concluirProtocolo(id);
       await carregar();
     } catch (e) {
-      setErro(e?.message || 'Erro ao concluir');
+      setErro(e?.message || "Erro ao concluir");
     }
   };
 
   const excluir = async (id) => {
-    if (!window.confirm('Excluir este protocolo? (será marcado como cancelado)')) return;
-    setErro('');
+    if (
+      !window.confirm("Excluir este protocolo? (será marcado como cancelado)")
+    )
+      return;
+    setErro("");
     try {
       await deleteProtocolo(id);
       await carregar();
     } catch (e) {
-      setErro(e?.message || 'Erro ao excluir');
+      setErro(e?.message || "Erro ao excluir");
     }
   };
 
   const abrirModalServico = (p) => {
     setProtocoloSel(p);
-    const first = servicos?.[0]?.id ? String(servicos[0].id) : '';
+    const first = servicos?.[0]?.id ? String(servicos[0].id) : "";
     setServicoSel(first);
     setRenovarPrazo(true);
     setServicoResp(null);
@@ -502,7 +695,7 @@ export default function Protocolos({ usuario }) {
   const fecharModalServico = () => {
     setModalServicoOpen(false);
     setProtocoloSel(null);
-    setServicoSel('');
+    setServicoSel("");
     setServicoResp(null);
   };
 
@@ -515,10 +708,10 @@ export default function Protocolos({ usuario }) {
   const salvarServico = async (e) => {
     e.preventDefault();
     if (!protocoloSel?.id) return;
-    setErro('');
+    setErro("");
     setSaving(true);
     try {
-      if (!servicoSel) throw new Error('Selecione um serviço');
+      if (!servicoSel) throw new Error("Selecione um serviço");
       const resp = await addServicoAoProtocolo(protocoloSel.id, {
         servico_id: Number(servicoSel),
         renovarPrazo,
@@ -526,7 +719,7 @@ export default function Protocolos({ usuario }) {
       setServicoResp(resp);
       await carregar();
     } catch (e2) {
-      setErro(e2?.message || 'Erro ao adicionar serviço');
+      setErro(e2?.message || "Erro ao adicionar serviço");
     } finally {
       setSaving(false);
     }
@@ -534,8 +727,8 @@ export default function Protocolos({ usuario }) {
 
   const abrirModalNotas = async (p) => {
     setProtocoloNotasSel(p);
-    setNovaNota('');
-    setAbaSelecionada('notas');
+    setNovaNota("");
+    setAbaSelecionada("notas");
     setModalNotasOpen(true);
     setLoadingNotas(true);
     try {
@@ -546,7 +739,7 @@ export default function Protocolos({ usuario }) {
       setNotas(Array.isArray(notasData) ? notasData : []);
       setHistorico(Array.isArray(historicoData) ? historicoData : []);
     } catch (e) {
-      setErro(e?.message || 'Erro ao carregar notas/histórico');
+      setErro(e?.message || "Erro ao carregar notas/histórico");
     } finally {
       setLoadingNotas(false);
     }
@@ -557,17 +750,17 @@ export default function Protocolos({ usuario }) {
     setProtocoloNotasSel(null);
     setNotas([]);
     setHistorico([]);
-    setNovaNota('');
+    setNovaNota("");
   };
 
   const salvarNota = async (e) => {
     e.preventDefault();
     if (!novaNota.trim()) return;
-    setErro('');
+    setErro("");
     setSaving(true);
     try {
       await addNota(protocoloNotasSel.id, novaNota);
-      setNovaNota('');
+      setNovaNota("");
       const [notasData, historicoData] = await Promise.all([
         getNotas(protocoloNotasSel.id),
         getHistorico(protocoloNotasSel.id),
@@ -575,33 +768,38 @@ export default function Protocolos({ usuario }) {
       setNotas(Array.isArray(notasData) ? notasData : []);
       setHistorico(Array.isArray(historicoData) ? historicoData : []);
     } catch (e) {
-      setErro(e?.message || 'Erro ao adicionar nota');
+      setErro(e?.message || "Erro ao adicionar nota");
     } finally {
       setSaving(false);
     }
   };
 
   const enviarAlertasManual = async () => {
-    if (!window.confirm('Deseja enviar alertas de vencimento agora?')) return;
+    if (!window.confirm("Deseja enviar alertas de vencimento agora?")) return;
     setEnviandoAlertas(true);
     setResultadoAlertas(null);
-    setErro('');
+    setErro("");
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const response = await fetch(`${API_URL}/alertas/verificar-vencimentos`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
-      if (!response.ok) throw new Error('Erro ao enviar alertas');
+      if (!response.ok) throw new Error("Erro ao enviar alertas");
       const resultado = await response.json();
       setResultadoAlertas(resultado);
       if (resultado.total === 0) {
-        alert('✅ Nenhum protocolo vencendo no momento.');
+        alert("✅ Nenhum protocolo vencendo no momento.");
       } else {
-        alert(`✅ ${resultado.enviados} alerta(s) enviado(s) com sucesso!\n\nTotal de protocolos: ${resultado.total}`);
+        alert(
+          `✅ ${resultado.enviados} alerta(s) enviado(s) com sucesso!\n\nTotal de protocolos: ${resultado.total}`
+        );
       }
     } catch (e) {
-      setErro(e?.message || 'Erro ao enviar alertas');
+      setErro(e?.message || "Erro ao enviar alertas");
     } finally {
       setEnviandoAlertas(false);
     }
@@ -621,14 +819,19 @@ export default function Protocolos({ usuario }) {
     <div className="protocolos-container">
       <div className="protocolos-header">
         <h1 className="protocolos-title">Protocolos</h1>
-        <p className="protocolos-subtitle">Cadastro, acompanhamento e conclusão de protocolos.</p>
+        <p className="protocolos-subtitle">
+          Cadastro, acompanhamento e conclusão de protocolos.
+        </p>
       </div>
 
-      {erro && <div className="alert-moderno alert-error-moderno">⚠️ {erro}</div>}
+      {erro && (
+        <div className="alert-moderno alert-error-moderno">⚠️ {erro}</div>
+      )}
 
       {resultadoAlertas && resultadoAlertas.total > 0 && (
         <div className="alert-moderno alert-success-moderno">
-          ✅ Alertas enviados: {resultadoAlertas.enviados} de {resultadoAlertas.total}
+          ✅ Alertas enviados: {resultadoAlertas.enviados} de{" "}
+          {resultadoAlertas.total}
         </div>
       )}
 
@@ -643,21 +846,36 @@ export default function Protocolos({ usuario }) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-            <select className="select-moderno" style={{ minWidth: 180 }} value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
+            <select
+              className="select-moderno"
+              style={{ minWidth: 180 }}
+              value={fStatus}
+              onChange={(e) => setFStatus(e.target.value)}
+            >
               <option value="">Todos status</option>
               {statusList.map((s) => (
-                <option key={s.nome} value={s.nome}>{s.nome}</option>
+                <option key={s.nome} value={s.nome}>
+                  {s.nome}
+                </option>
               ))}
             </select>
-            <select className="select-moderno" style={{ minWidth: 200 }} value={fResp} onChange={(e) => setFResp(e.target.value)}>
+            <select
+              className="select-moderno"
+              style={{ minWidth: 200 }}
+              value={fResp}
+              onChange={(e) => setFResp(e.target.value)}
+            >
               <option value="">Todos responsáveis</option>
               {funcionarios.map((f) => (
-                <option key={f.id} value={f.id}>{f.nome}</option>
+                <option key={f.id} value={f.id}>
+                  {f.nome}
+                </option>
               ))}
             </select>
 
             {/* Botão Relatório Financeiro - Supervisor e Coordenador */}
-            {(usuario?.cargo === 'Supervisor' || usuario?.cargo === 'Coordenador') && (
+            {(usuario?.cargo === "Supervisor" ||
+              usuario?.cargo === "Coordenador") && (
               <button
                 className="btn-moderno btn-primary-moderno"
                 onClick={() => setVerRelatorioFinanceiro(true)}
@@ -668,18 +886,22 @@ export default function Protocolos({ usuario }) {
             )}
 
             {/* Botão Alertas - Supervisor */}
-            {(usuario?.cargo === 'Supervisor' || usuario?.cargo === 'Coordenador') && (
+            {(usuario?.cargo === "Supervisor" ||
+              usuario?.cargo === "Coordenador") && (
               <button
                 className="btn-moderno btn-warning-moderno"
                 onClick={enviarAlertasManual}
                 disabled={enviandoAlertas}
                 title="Enviar alertas de vencimento"
               >
-                {enviandoAlertas ? '⏳ Enviando...' : '🔔 Enviar Alertas'}
+                {enviandoAlertas ? "⏳ Enviando..." : "🔔 Enviar Alertas"}
               </button>
             )}
 
-            <button className="btn-moderno btn-success-moderno" onClick={abrirNovo}>
+            <button
+              className="btn-moderno btn-success-moderno"
+              onClick={abrirNovo}
+            >
               ➕ Novo Protocolo
             </button>
           </div>
@@ -702,47 +924,98 @@ export default function Protocolos({ usuario }) {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan="9" style={{ textAlign: 'center' }}>Carregando...</td></tr>
-              )}
-              {!loading && filtrados.length === 0 && (
-                <tr><td colSpan="9" style={{ textAlign: 'center' }}>Nenhum protocolo encontrado</td></tr>
-              )}
-              {!loading && filtrados.map((p) => (
-                <tr key={p.id}>
-                  <td><strong>{p.numero}</strong></td>
-                  <td>{p.servico_nome}</td>
-                  <td>{p.responsavel_setor || '-'}</td>
-                  <td>{p.responsavel_nome}</td>
-                  <td>{String(p.data_entrada).slice(0, 10)}</td>
-                  <td>{String(p.data_vencimento).slice(0, 10)}</td>
-                  <td>
-                    {p.tem_orcamento ? (
-                      <span style={{ color: '#059669', fontWeight: 600 }}>
-                        {formatMoeda(p.orcamento_valor)}
-                        {p.orcamento_pago && ' ✅'}
-                      </span>
-                    ) : (
-                      <span style={{ color: '#9ca3af' }}>-</span>
-                    )}
-                  </td>
-                  <td><span className={statusBadgeClass(p.status)}>{statusLabel(p.status)}</span></td>
-                  <td>
-                    <div className="acoes-container">
-                      <button className="btn-action btn-action-edit" onClick={() => abrirEdicao(p)} title="Editar">✏️</button>
-                      {p.status === 'andamento' && (
-                        <>
-                          <button className="btn-action btn-action-edit" onClick={() => abrirModalServico(p)} title="Adicionar Serviço">+</button>
-                          <button className="btn-action btn-action-success" onClick={() => concluir(p.id)} title="Concluir">✓</button>
-                        </>
-                      )}
-                      <button className="btn-action btn-action-edit" onClick={() => abrirModalNotas(p)} title="Notas">📝</button>
-                      {usuario?.cargo !== 'Registrador' && (
-                      <button className="btn-action btn-action-delete" onClick={() => excluir(p.id)} title="Excluir">🗑️</button>
-                      )}
-                    </div>
+                <tr>
+                  <td colSpan="9" style={{ textAlign: "center" }}>
+                    Carregando...
                   </td>
                 </tr>
-              ))}
+              )}
+              {!loading && filtrados.length === 0 && (
+                <tr>
+                  <td colSpan="9" style={{ textAlign: "center" }}>
+                    Nenhum protocolo encontrado
+                  </td>
+                </tr>
+              )}
+              {!loading &&
+                filtrados.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <strong>{p.numero}</strong>
+                    </td>
+                    <td>{p.servico_nome}</td>
+                    <td>{p.responsavel_setor || "-"}</td>
+                    <td>{p.responsavel_nome}</td>
+                    <td>{String(p.data_entrada).slice(0, 10)}</td>
+                    <td>{String(p.data_vencimento).slice(0, 10)}</td>
+                    <td>
+                      {p.tem_orcamento ? (
+                        <span style={{ color: "#059669", fontWeight: 600 }}>
+                          {formatMoeda(p.orcamento_valor)}
+                          {p.orcamento_pago && " ✅"}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#9ca3af" }}>-</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={statusBadgeClass(p.status)}>
+                        {statusLabel(p.status)}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="acoes-container">
+                        <button
+                          className="btn-action btn-action-edit"
+                          onClick={() => abrirEdicao(p)}
+                          title="Editar"
+                        >
+                          ✏️
+                        </button>
+                        {(p.status === "andamento" ||
+                          p.status === "concluido") && (
+                          <button
+                            className="btn-action btn-action-edit"
+                            onClick={() => abrirModalServico(p)}
+                            title={
+                              p.status === "concluido"
+                                ? "Adicionar Serviço (reabre o protocolo)"
+                                : "Adicionar Serviço"
+                            }
+                          >
+                            +
+                          </button>
+                        )}
+
+                        {p.status === "andamento" && (
+                          <button
+                            className="btn-action btn-action-success"
+                            onClick={() => concluir(p.id)}
+                            title="Concluir"
+                          >
+                            ✓
+                          </button>
+                        )}
+                        <button
+                          className="btn-action btn-action-edit"
+                          onClick={() => abrirModalNotas(p)}
+                          title="Notas"
+                        >
+                          📝
+                        </button>
+                        {usuario?.cargo !== "Registrador" && (
+                          <button
+                            className="btn-action btn-action-delete"
+                            onClick={() => excluir(p.id)}
+                            title="Excluir"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
@@ -752,8 +1025,8 @@ export default function Protocolos({ usuario }) {
       {modalOpen && (
         <div className="modal-overlay" onClick={fecharModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>{editId ? 'Editar Protocolo' : 'Novo Protocolo'}</h2>
-            
+            <h2>{editId ? "Editar Protocolo" : "Novo Protocolo"}</h2>
+
             <form onSubmit={salvar} onKeyDown={handleEnterKey}>
               <div className="form-group">
                 <label htmlFor="numero">Número</label>
@@ -764,7 +1037,7 @@ export default function Protocolos({ usuario }) {
                   value={form.numero}
                   onChange={(e) => setForm({ ...form, numero: e.target.value })}
                   placeholder="Ex: 2026-000123"
-                  disabled={!!editId && usuario?.cargo === 'Registrador'}
+                  disabled={!!editId && usuario?.cargo === "Registrador"}
                   required
                 />
               </div>
@@ -775,14 +1048,17 @@ export default function Protocolos({ usuario }) {
                   id="servico"
                   className="form-select"
                   value={form.servico_id}
-                  onChange={(e) => setForm({ ...form, servico_id: e.target.value })}
-                  disabled={!!editId && usuario?.cargo === 'Registrador'}
+                  onChange={(e) =>
+                    setForm({ ...form, servico_id: e.target.value })
+                  }
+                  disabled={!!editId && usuario?.cargo === "Registrador"}
                   required
                 >
                   <option value="">Selecione...</option>
                   {servicos.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.nome} ({s.prazo} {s.tipo_prazo === 'uteis' ? 'úteis' : 'corridos'})
+                      {s.nome} ({s.prazo}{" "}
+                      {s.tipo_prazo === "uteis" ? "úteis" : "corridos"})
                     </option>
                   ))}
                 </select>
@@ -795,8 +1071,10 @@ export default function Protocolos({ usuario }) {
                   id="data_entrada"
                   className="form-input"
                   value={form.data_entrada}
-                  onChange={(e) => setForm({ ...form, data_entrada: e.target.value })}
-                  disabled={!!editId && usuario?.cargo === 'Registrador'}
+                  onChange={(e) =>
+                    setForm({ ...form, data_entrada: e.target.value })
+                  }
+                  disabled={!!editId && usuario?.cargo === "Registrador"}
                   required
                 />
               </div>
@@ -807,7 +1085,9 @@ export default function Protocolos({ usuario }) {
                   id="responsavel"
                   className="form-select"
                   value={form.responsavel_id}
-                  onChange={(e) => setForm({ ...form, responsavel_id: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, responsavel_id: e.target.value })
+                  }
                   required
                 >
                   <option value="">Selecione...</option>
@@ -820,7 +1100,16 @@ export default function Protocolos({ usuario }) {
               </div>
 
               {setorResponsavel && (
-                <div className="info-box" style={{ background: '#f0f9ff', border: '1px solid #bae6fd', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem' }}>
+                <div
+                  className="info-box"
+                  style={{
+                    background: "#f0f9ff",
+                    border: "1px solid #bae6fd",
+                    padding: "0.75rem",
+                    borderRadius: "6px",
+                    marginBottom: "1rem",
+                  }}
+                >
                   <strong>Setor:</strong> {setorResponsavel}
                 </div>
               )}
@@ -832,41 +1121,69 @@ export default function Protocolos({ usuario }) {
                   className="form-input"
                   rows="3"
                   value={form.observacoes}
-                  onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, observacoes: e.target.value })
+                  }
                   placeholder="Detalhes do protocolo..."
                 />
               </div>
 
               {/* ===== CAMPO ORÇAMENTO ===== */}
               <div className="form-group">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    cursor: "pointer",
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={form.tem_orcamento}
-                    onChange={(e) => setForm({ ...form, tem_orcamento: e.target.checked, orcamento_valor: '' })}
-                    style={{ width: '16px', height: '16px' }}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        tem_orcamento: e.target.checked,
+                        orcamento_valor: "",
+                      })
+                    }
+                    style={{ width: "16px", height: "16px" }}
                   />
                   <span style={{ fontWeight: 600 }}>💰 Possui Orçamento</span>
                 </label>
               </div>
 
               {form.tem_orcamento && (
-                <div className="form-group" style={{ animation: 'fadeIn 0.2s ease' }}>
-                  <label htmlFor="orcamento_valor">Valor do Orçamento (R$)</label>
+                <div
+                  className="form-group"
+                  style={{ animation: "fadeIn 0.2s ease" }}
+                >
+                  <label htmlFor="orcamento_valor">
+                    Valor do Orçamento (R$)
+                  </label>
                   <input
                     type="number"
                     id="orcamento_valor"
                     className="form-input"
                     value={form.orcamento_valor}
-                    onChange={(e) => setForm({ ...form, orcamento_valor: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, orcamento_valor: e.target.value })
+                    }
                     placeholder="Ex: 1500.00"
                     min="0.01"
                     step="0.01"
                     required={form.tem_orcamento}
-                    style={{ borderColor: '#10b981' }}
+                    style={{ borderColor: "#10b981" }}
                   />
                   {form.orcamento_valor && (
-                    <small style={{ color: '#059669', marginTop: '0.25rem', display: 'block' }}>
+                    <small
+                      style={{
+                        color: "#059669",
+                        marginTop: "0.25rem",
+                        display: "block",
+                      }}
+                    >
                       {formatMoeda(parseFloat(form.orcamento_valor))}
                     </small>
                   )}
@@ -881,19 +1198,33 @@ export default function Protocolos({ usuario }) {
                     id="status"
                     className="form-select"
                     value={form.status}
-                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, status: e.target.value })
+                    }
                   >
                     {statusList.map((s) => (
-                      <option key={s.nome} value={s.nome}>{s.nome}</option>
+                      <option key={s.nome} value={s.nome}>
+                        {s.nome}
+                      </option>
                     ))}
                   </select>
                 </div>
               )}
 
               <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={fecharModal}>Cancelar</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'Salvando...' : 'Salvar'}
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={fecharModal}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={saving}
+                >
+                  {saving ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </form>
@@ -919,7 +1250,8 @@ export default function Protocolos({ usuario }) {
                   <option value="">Selecione...</option>
                   {servicos.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.nome} ({s.prazo} {s.tipo_prazo === 'uteis' ? 'úteis' : 'corridos'})
+                      {s.nome} ({s.prazo}{" "}
+                      {s.tipo_prazo === "uteis" ? "úteis" : "corridos"})
                     </option>
                   ))}
                 </select>
@@ -927,8 +1259,12 @@ export default function Protocolos({ usuario }) {
 
               {servicoEscolhido && (
                 <div className="info-box">
-                  <strong>{servicoEscolhido.nome}</strong><br />
-                  Prazo: {servicoEscolhido.prazo} {servicoEscolhido.tipo_prazo === 'uteis' ? 'dias úteis' : 'dias corridos'}
+                  <strong>{servicoEscolhido.nome}</strong>
+                  <br />
+                  Prazo: {servicoEscolhido.prazo}{" "}
+                  {servicoEscolhido.tipo_prazo === "uteis"
+                    ? "dias úteis"
+                    : "dias corridos"}
                 </div>
               )}
 
@@ -938,10 +1274,16 @@ export default function Protocolos({ usuario }) {
                     type="checkbox"
                     checked={renovarPrazo}
                     onChange={(e) => setRenovarPrazo(e.target.checked)}
-                  />
-                  {' '}Renovar prazo (recalcular vencimento)
+                  />{" "}
+                  Renovar prazo (recalcular vencimento)
                 </label>
-                <small style={{ display: 'block', marginTop: '0.25rem', color: '#666' }}>
+                <small
+                  style={{
+                    display: "block",
+                    marginTop: "0.25rem",
+                    color: "#666",
+                  }}
+                >
                   Se desmarcado, mantém o prazo atual.
                 </small>
               </div>
@@ -953,9 +1295,19 @@ export default function Protocolos({ usuario }) {
               )}
 
               <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={fecharModalServico}>Fechar</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'Adicionando...' : 'Adicionar'}
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={fecharModalServico}
+                >
+                  Fechar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={saving}
+                >
+                  {saving ? "Adicionando..." : "Adicionar"}
                 </button>
               </div>
             </form>
@@ -966,29 +1318,65 @@ export default function Protocolos({ usuario }) {
       {/* Modal Notas e Histórico */}
       {modalNotasOpen && protocoloNotasSel && (
         <div className="modal-overlay" onClick={fecharModalNotas}>
-          <div className="modal-content" style={{ maxWidth: '700px' }} onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal-content"
+            style={{ maxWidth: "700px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2>Protocolo {protocoloNotasSel.numero}</h2>
-            
-            <div style={{ display: 'flex', gap: '1rem', borderBottom: '2px solid #e0e0e0', marginBottom: '1rem' }}>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "1rem",
+                borderBottom: "2px solid #e0e0e0",
+                marginBottom: "1rem",
+              }}
+            >
               <button
-                style={{ background: 'none', border: 'none', padding: '0.75rem 1rem', cursor: 'pointer', fontWeight: abaSelecionada === 'notas' ? 'bold' : 'normal', borderBottom: abaSelecionada === 'notas' ? '3px solid #16a34a' : '3px solid transparent' }}
-                onClick={() => setAbaSelecionada('notas')}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: "0.75rem 1rem",
+                  cursor: "pointer",
+                  fontWeight: abaSelecionada === "notas" ? "bold" : "normal",
+                  borderBottom:
+                    abaSelecionada === "notas"
+                      ? "3px solid #16a34a"
+                      : "3px solid transparent",
+                }}
+                onClick={() => setAbaSelecionada("notas")}
               >
                 📝 Notas ({notas.length})
               </button>
               <button
-                style={{ background: 'none', border: 'none', padding: '0.75rem 1rem', cursor: 'pointer', fontWeight: abaSelecionada === 'historico' ? 'bold' : 'normal', borderBottom: abaSelecionada === 'historico' ? '3px solid #16a34a' : '3px solid transparent' }}
-                onClick={() => setAbaSelecionada('historico')}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: "0.75rem 1rem",
+                  cursor: "pointer",
+                  fontWeight:
+                    abaSelecionada === "historico" ? "bold" : "normal",
+                  borderBottom:
+                    abaSelecionada === "historico"
+                      ? "3px solid #16a34a"
+                      : "3px solid transparent",
+                }}
+                onClick={() => setAbaSelecionada("historico")}
               >
                 📜 Histórico ({historico.length})
               </button>
             </div>
 
-            {loadingNotas && <div style={{ textAlign: 'center', padding: '2rem' }}>Carregando...</div>}
+            {loadingNotas && (
+              <div style={{ textAlign: "center", padding: "2rem" }}>
+                Carregando...
+              </div>
+            )}
 
-            {!loadingNotas && abaSelecionada === 'notas' && (
+            {!loadingNotas && abaSelecionada === "notas" && (
               <div>
-                <form onSubmit={salvarNota} style={{ marginBottom: '1.5rem' }}>
+                <form onSubmit={salvarNota} style={{ marginBottom: "1.5rem" }}>
                   <div className="form-group">
                     <label>Adicionar Nota</label>
                     <textarea
@@ -1000,45 +1388,99 @@ export default function Protocolos({ usuario }) {
                       required
                     />
                   </div>
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
-                    {saving ? 'Salvando...' : 'Adicionar Nota'}
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-sm"
+                    disabled={saving}
+                  >
+                    {saving ? "Salvando..." : "Adicionar Nota"}
                   </button>
                 </form>
 
-                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <div style={{ maxHeight: "400px", overflowY: "auto" }}>
                   {notas.length === 0 && (
-                    <p style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>Nenhuma nota ainda.</p>
+                    <p
+                      style={{
+                        textAlign: "center",
+                        color: "#666",
+                        padding: "2rem",
+                      }}
+                    >
+                      Nenhuma nota ainda.
+                    </p>
                   )}
                   {notas.map((nota) => (
-                    <div key={nota.id} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1rem', marginBottom: '0.75rem' }}>
-                      <div style={{ marginBottom: '0.5rem' }}>
-                        <strong>{nota.usuario_nome || 'Usuário'}</strong>{' '}
-                        <span style={{ color: '#666', fontSize: '0.85rem' }}>({nota.usuario_setor || nota.usuario_cargo || 'Cargo'})</span>
+                    <div
+                      key={nota.id}
+                      style={{
+                        background: "#f9fafb",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "8px",
+                        padding: "1rem",
+                        marginBottom: "0.75rem",
+                      }}
+                    >
+                      <div style={{ marginBottom: "0.5rem" }}>
+                        <strong>{nota.usuario_nome || "Usuário"}</strong>{" "}
+                        <span style={{ color: "#666", fontSize: "0.85rem" }}>
+                          ({nota.usuario_setor || nota.usuario_cargo || "Cargo"}
+                          )
+                        </span>
                         <br />
-                        <small style={{ color: '#999' }}>{formatDateTime(nota.created_at)}</small>
+                        <small style={{ color: "#999" }}>
+                          {formatDateTime(nota.created_at)}
+                        </small>
                       </div>
-                      <div style={{ whiteSpace: 'pre-wrap' }}>{nota.nota}</div>
+                      <div style={{ whiteSpace: "pre-wrap" }}>{nota.nota}</div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {!loadingNotas && abaSelecionada === 'historico' && (
-              <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            {!loadingNotas && abaSelecionada === "historico" && (
+              <div style={{ maxHeight: "500px", overflowY: "auto" }}>
                 {historico.length === 0 && (
-                  <p style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>Nenhum registro no histórico</p>
+                  <p
+                    style={{
+                      textAlign: "center",
+                      color: "#666",
+                      padding: "2rem",
+                    }}
+                  >
+                    Nenhum registro no histórico
+                  </p>
                 )}
                 {historico.map((h) => (
-                  <div key={h.id} style={{ background: '#fefefe', border: '1px solid #e5e7eb', borderLeft: '4px solid #16a34a', borderRadius: '4px', padding: '1rem', marginBottom: '0.75rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <strong style={{ color: '#16a34a' }}>{h.acao}</strong>
-                      <small style={{ color: '#999' }}>{formatDateTime(h.created_at)}</small>
+                  <div
+                    key={h.id}
+                    style={{
+                      background: "#fefefe",
+                      border: "1px solid #e5e7eb",
+                      borderLeft: "4px solid #16a34a",
+                      borderRadius: "4px",
+                      padding: "1rem",
+                      marginBottom: "0.75rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      <strong style={{ color: "#16a34a" }}>{h.acao}</strong>
+                      <small style={{ color: "#999" }}>
+                        {formatDateTime(h.created_at)}
+                      </small>
                     </div>
-                    <div style={{ marginBottom: '0.25rem' }}>{h.descricao}</div>
+                    <div style={{ marginBottom: "0.25rem" }}>{h.descricao}</div>
                     {h.usuario_nome && (
-                      <small style={{ color: '#666' }}>
-                        Por: {h.usuario_nome} {h.usuario_setor && `(${h.usuario_setor})`} - {h.usuario_email}
+                      <small style={{ color: "#666" }}>
+                        Por: {h.usuario_nome}{" "}
+                        {h.usuario_setor && `(${h.usuario_setor})`} -{" "}
+                        {h.usuario_email}
                       </small>
                     )}
                   </div>
@@ -1046,8 +1488,14 @@ export default function Protocolos({ usuario }) {
               </div>
             )}
 
-            <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
-              <button type="button" className="btn btn-secondary" onClick={fecharModalNotas}>Fechar</button>
+            <div className="modal-actions" style={{ marginTop: "1.5rem" }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={fecharModalNotas}
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>

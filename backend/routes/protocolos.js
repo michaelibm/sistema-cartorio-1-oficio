@@ -460,10 +460,29 @@ router.post('/:id/adicionar-servico', authMiddleware, async (req, res) => {
       return res.status(403).json({ message: 'Você só pode adicionar serviços aos seus próprios protocolos' });
     }
     
-    if (protocolo.status !== 'andamento') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Só é possível adicionar serviço em protocolo "andamento".' });
-    }
+    // Bloqueia apenas cancelado
+if (protocolo.status === 'cancelado') {
+  await client.query('ROLLBACK');
+  return res.status(400).json({ message: 'Não é possível adicionar serviço em protocolo cancelado.' });
+}
+
+// Se estiver concluído, reabre para andamento automaticamente
+if (protocolo.status === 'concluido') {
+  await client.query(
+    `UPDATE protocolos 
+     SET status = 'andamento', data_conclusao = NULL
+     WHERE id = $1`,
+    [id]
+  );
+
+  await client.query(
+    'INSERT INTO historico (protocolo_id, usuario_id, acao, descricao) VALUES ($1, $2, $3, $4)',
+    [id, req.user.id, 'REABERTURA', `Protocolo reaberto automaticamente ao adicionar novo serviço por ${req.user.email}`]
+  );
+
+  // Atualiza a variável local para seguir o fluxo com status correto
+  protocolo.status = 'andamento';
+}
 
     const servicoRes = await client.query('SELECT id, nome, prazo, tipo_prazo FROM servicos WHERE id = $1', [servico_id]);
     if (servicoRes.rows.length === 0) {
