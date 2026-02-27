@@ -67,6 +67,23 @@ const formatMoeda = (valor) => {
   });
 };
 
+const PRIORIDADE_CONFIG = {
+  1: { label: "Baixa",   cor: "#6b7280", bg: "#f3f4f6", emoji: "🔵" },
+  2: { label: "Média",   cor: "#d97706", bg: "#fef3c7", emoji: "🟡" },
+  3: { label: "Urgente", cor: "#dc2626", bg: "#fee2e2", emoji: "🔴" },
+};
+
+const corLinha = (p) => {
+  if (p.status === "concluido" || p.status === "cancelado") return {};
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const venc = new Date(p.data_vencimento); venc.setHours(0, 0, 0, 0);
+  const diff = Math.ceil((venc - hoje) / (1000 * 60 * 60 * 24));
+  if (diff < 0)  return { background: "#fff1f2", borderLeft: "4px solid #ef4444" };
+  if (diff <= 3) return { background: "#fffbeb", borderLeft: "4px solid #f59e0b" };
+  if (p.prioridade === 3) return { background: "#fff8f8", borderLeft: "4px solid #dc2626" };
+  return {};
+};
+
 // ============================================================
 // COMPONENTE RELATÓRIO FINANCEIRO
 // ============================================================
@@ -484,6 +501,7 @@ export default function Protocolos({ usuario }) {
     status: "andamento",
     tem_orcamento: false,
     orcamento_valor: "",
+    prioridade: 2,
   });
 
   // modal adicionar serviço
@@ -586,6 +604,7 @@ export default function Protocolos({ usuario }) {
       status: "andamento",
       tem_orcamento: false,
       orcamento_valor: "",
+      prioridade: 2,
     });
     setModalOpen(true);
   };
@@ -601,6 +620,7 @@ export default function Protocolos({ usuario }) {
       status: p.status || "andamento",
       tem_orcamento: !!p.tem_orcamento,
       orcamento_valor: p.orcamento_valor ? String(p.orcamento_valor) : "",
+      prioridade: p.prioridade ?? 2,
     });
     setModalOpen(true);
   };
@@ -644,6 +664,7 @@ export default function Protocolos({ usuario }) {
           orcamento_valor: form.tem_orcamento
             ? parseFloat(form.orcamento_valor)
             : null,
+          prioridade: Number(form.prioridade),
         });
       } else {
         // Tentar criar — tratar conflito 409
@@ -659,6 +680,7 @@ export default function Protocolos({ usuario }) {
             observacoes: form.observacoes,
             tem_orcamento: form.tem_orcamento,
             orcamento_valor: form.tem_orcamento ? parseFloat(form.orcamento_valor) : null,
+            prioridade: Number(form.prioridade),
           }),
         });
 
@@ -999,6 +1021,7 @@ export default function Protocolos({ usuario }) {
             <thead>
               <tr>
                 <th>Número</th>
+                <th>Prioridade</th>
                 <th>Serviço</th>
                 <th>Setor</th>
                 <th>Responsável</th>
@@ -1012,29 +1035,69 @@ export default function Protocolos({ usuario }) {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: "center" }}>
+                  <td colSpan="10" style={{ textAlign: "center" }}>
                     Carregando...
                   </td>
                 </tr>
               )}
               {!loading && filtrados.length === 0 && (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: "center" }}>
+                  <td colSpan="10" style={{ textAlign: "center" }}>
                     Nenhum protocolo encontrado
                   </td>
                 </tr>
               )}
               {!loading &&
                 filtrados.map((p) => (
-                  <tr key={p.id}>
+                  <tr key={p.id} style={corLinha(p)}>
                     <td>
                       <strong>{p.numero}</strong>
+                      {p.prioridade === 3 && (
+                        <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: "#dc2626", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                          ★ Urgente!
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {(() => {
+                        const cfg = PRIORIDADE_CONFIG[p.prioridade] || PRIORIDADE_CONFIG[2];
+                        return (
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: "0.2rem 0.6rem", borderRadius: 99,
+                            background: cfg.bg, color: cfg.cor,
+                            fontSize: 11, fontWeight: 700,
+                            border: p.prioridade === 3 ? "1px solid #fca5a5" : "none",
+                            boxShadow: p.prioridade === 3 ? "0 0 6px #ef444428" : "none",
+                          }}>
+                            {cfg.emoji} {cfg.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td>{p.servico_nome}</td>
                     <td>{p.responsavel_setor || "-"}</td>
                     <td>{p.responsavel_nome}</td>
                     <td>{String(p.data_entrada).slice(0, 10)}</td>
-                    <td>{String(p.data_vencimento).slice(0, 10)}</td>
+                    <td>
+                      {(() => {
+                        const hoje = new Date(); hoje.setHours(0,0,0,0);
+                        const venc = new Date(p.data_vencimento); venc.setHours(0,0,0,0);
+                        const diff = Math.ceil((venc - hoje) / (1000 * 60 * 60 * 24));
+                        const isAtivo = p.status !== "concluido" && p.status !== "cancelado";
+                        return (
+                          <span style={{
+                            fontWeight: isAtivo && diff < 0 ? 700 : isAtivo && diff <= 3 ? 600 : "normal",
+                            color: isAtivo && diff < 0 ? "#dc2626" : isAtivo && diff <= 3 ? "#d97706" : "inherit",
+                          }}>
+                            {String(p.data_vencimento).slice(0, 10)}
+                            {isAtivo && diff < 0 && <span style={{ marginLeft: 4, fontSize: 10 }}>⚠️ VENCIDO</span>}
+                            {isAtivo && diff === 0 && <span style={{ marginLeft: 4, fontSize: 10 }}>🔴 HOJE</span>}
+                            {isAtivo && diff > 0 && diff <= 3 && <span style={{ marginLeft: 4, fontSize: 10 }}>🟡 {diff}d</span>}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td>
                       {p.tem_orcamento ? (
                         <span style={{ color: "#059669", fontWeight: 600 }}>
@@ -1210,6 +1273,41 @@ export default function Protocolos({ usuario }) {
                   <strong>Setor:</strong> {setorResponsavel}
                 </div>
               )}
+
+              <div className="form-group">
+                <label>Prioridade</label>
+                <div style={{ display: "flex", gap: "0.75rem" }}>
+                  {[1, 2, 3].map((nivel) => {
+                    const cfg = PRIORIDADE_CONFIG[nivel];
+                    const ativo = Number(form.prioridade) === nivel;
+                    return (
+                      <button
+                        key={nivel}
+                        type="button"
+                        onClick={() => setForm({ ...form, prioridade: nivel })}
+                        style={{
+                          flex: 1,
+                          padding: "0.6rem",
+                          borderRadius: 10,
+                          border: ativo ? `2px solid ${cfg.cor}` : "2px solid #e5e7eb",
+                          background: ativo ? cfg.bg : "white",
+                          color: ativo ? cfg.cor : "#6b7280",
+                          fontWeight: ativo ? 700 : 500,
+                          fontSize: 13,
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6,
+                        }}
+                      >
+                        {cfg.emoji} {cfg.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               <div className="form-group">
                 <label htmlFor="observacoes">Observações</label>

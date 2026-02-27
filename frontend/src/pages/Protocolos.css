@@ -501,3 +501,30 @@ textarea.form-input {
     text-align: center;
   }
 }
+
+/* ============================================================
+   LINHAS DE PRIORIDADE E VENCIMENTO
+   ============================================================ */
+
+/* Linha vencida */
+.table-moderno tbody tr.linha-vencida {
+  background: #fff1f2 !important;
+  border-left: 4px solid #ef4444;
+}
+
+/* Linha vencendo em 3 dias */
+.table-moderno tbody tr.linha-vencendo {
+  background: #fffbeb !important;
+  border-left: 4px solid #f59e0b;
+}
+
+/* Linha prioridade oficial */
+.table-moderno tbody tr.linha-oficial {
+  background: #fff8f8 !important;
+  border-left: 4px solid #dc2626;
+}
+
+/* Hover mantém tom da cor */
+.table-moderno tbody tr.linha-vencida:hover  { background: #ffe4e6 !important; }
+.table-moderno tbody tr.linha-vencendo:hover { background: #fef3c7 !important; }
+.table-moderno tbody tr.linha-oficial:hover  { background: #fee2e2 !important; }

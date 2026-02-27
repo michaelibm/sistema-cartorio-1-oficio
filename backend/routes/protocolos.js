@@ -137,7 +137,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 // Criar novo protocolo
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { numero, servico_id, responsavel_id, data_entrada, observacoes, tem_orcamento, orcamento_valor } = req.body;
+    const { numero, servico_id, responsavel_id, data_entrada, observacoes, tem_orcamento, orcamento_valor, prioridade } = req.body;
 
     if (!numero || !servico_id || !responsavel_id || !data_entrada) {
       return res.status(400).json({ message: 'Campos obrigatórios faltando' });
@@ -184,12 +184,13 @@ router.post('/', authMiddleware, async (req, res) => {
 
     // Validar valor do orçamento
     const valorOrcamento = (tem_orcamento && orcamento_valor) ? parseFloat(orcamento_valor) : null;
+    const prioridadeVal = prioridade ? parseInt(prioridade) : 2;
 
     const result = await pool.query(
-      `INSERT INTO protocolos (numero, servico_id, responsavel_id, data_entrada, data_vencimento, observacoes, tem_orcamento, orcamento_valor)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO protocolos (numero, servico_id, responsavel_id, data_entrada, data_vencimento, observacoes, tem_orcamento, orcamento_valor, prioridade)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [numero, servico_id, responsavel_id, data_entrada, data_vencimento, observacoes, !!tem_orcamento, valorOrcamento]
+      [numero, servico_id, responsavel_id, data_entrada, data_vencimento, observacoes, !!tem_orcamento, valorOrcamento, prioridadeVal]
     );
 
     const userResult = await pool.query('SELECT nome, setor FROM usuarios WHERE id = $1', [responsavel_id]);
@@ -211,7 +212,7 @@ router.post('/', authMiddleware, async (req, res) => {
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { responsavel_id, observacoes, status, tem_orcamento, orcamento_valor, orcamento_pago } = req.body;
+    const { responsavel_id, observacoes, status, tem_orcamento, orcamento_valor, orcamento_pago, prioridade } = req.body;
 
     if (req.user.cargo === 'Registrador') {
       const checkProtocolo = await pool.query('SELECT responsavel_id FROM protocolos WHERE id = $1', [id]);
@@ -271,6 +272,12 @@ router.put('/:id', authMiddleware, async (req, res) => {
     if (orcamento_pago !== undefined) {
       updates.push(`orcamento_pago = $${paramCount}`);
       params.push(!!orcamento_pago);
+      paramCount++;
+    }
+
+    if (prioridade !== undefined) {
+      updates.push(`prioridade = $${paramCount}`);
+      params.push(parseInt(prioridade));
       paramCount++;
     }
 

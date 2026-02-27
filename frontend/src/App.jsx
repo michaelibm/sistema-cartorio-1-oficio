@@ -8,6 +8,7 @@ import Servicos from './pages/Servicos';
 import Funcionarios from './pages/Funcionarios';
 import Relatorios from './pages/Relatorios';
 import Configuracoes from './pages/Configuracoes';
+import Painel from './pages/Painel';
 
 import Sidebar from './components/Sidebar';
 import './styles/App.css';
@@ -25,7 +26,6 @@ function App() {
       try {
         setUsuario(JSON.parse(usuarioSalvo));
       } catch {
-        // se o storage estiver corrompido
         localStorage.removeItem('usuario');
         localStorage.removeItem('token');
       }
@@ -53,6 +53,17 @@ function App() {
     );
   }
 
+  // Rota pública - sem login
+  if (window.location.pathname === '/painel') {
+    return (
+      <Router>
+        <Routes>
+          <Route path="/painel" element={<Painel />} />
+        </Routes>
+      </Router>
+    );
+  }
+
   if (!usuario) {
     return <Login onLogin={handleLogin} />;
   }
@@ -73,6 +84,7 @@ function App() {
             <Route path="/funcionarios" element={<Funcionarios usuario={usuario} />} />
             <Route path="/relatorios" element={<Relatorios usuario={usuario} />} />
             <Route path="/configuracoes" element={<Configuracoes usuario={usuario} />} />
+            <Route path="/painel" element={<Painel />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
