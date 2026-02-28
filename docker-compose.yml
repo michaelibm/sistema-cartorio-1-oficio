@@ -35,7 +35,6 @@ services:
       PORT: ${BACKEND_PORT:-5000}
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
-      # CORS deve ser a URL EXATA do frontend que o navegador usa
       CORS_ORIGIN: ${CORS_ORIGIN}
     ports:
       - "${BACKEND_PORT:-5000}:5000"
@@ -49,12 +48,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # ⬅️ Passa o IP real do servidor no momento do build
+        - REACT_APP_API_URL=${REACT_APP_API_URL:-http://192.168.0.95:5000/api}
     container_name: cartorio-frontend
     restart: unless-stopped
-    # IMPORTANTE: React/Vue costuma "embutir" variáveis no build.
-    # Então esta env precisa estar correta ANTES do build.
-    environment:
-       VUE_APP_API_URL: ${VUE_APP_API_URL:-http://backend:5000/api}
     ports:
       - "${FRONTEND_PORT:-3001}:80"
     depends_on:
