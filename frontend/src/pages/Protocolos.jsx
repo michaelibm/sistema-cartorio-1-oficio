@@ -17,15 +17,17 @@ import {
 } from "../services/api";
 
 const statusLabel = (s) => {
-  if (s === "andamento") return "Em andamento";
-  if (s === "concluido") return "Concluído";
-  if (s === "cancelado") return "Cancelado";
+  if (s === "andamento")  return "Em andamento";
+  if (s === "concluido")  return "Concluído";
+  if (s === "cancelado")  return "Cancelado";
+  if (s === "aguardando") return "Aguardando";
   return s;
 };
 
 const statusBadgeClass = (s) => {
-  if (s === "concluido") return "badge-moderno badge-success-moderno";
-  if (s === "cancelado") return "badge-moderno badge-danger-moderno";
+  if (s === "concluido")  return "badge-moderno badge-success-moderno";
+  if (s === "cancelado")  return "badge-moderno badge-danger-moderno";
+  if (s === "aguardando") return "badge-moderno badge-warning-moderno";
   return "badge-moderno badge-info-moderno";
 };
 
@@ -480,6 +482,16 @@ export default function Protocolos({ usuario }) {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
 
+  // Fila de atendimento
+  const [verFila, setVerFila] = useState(false);
+  const [fila, setFila] = useState([]);
+  const [loadingFila, setLoadingFila] = useState(false);
+  const [modalAtendOpen, setModalAtendOpen] = useState(false);
+  const [formAtend, setFormAtend] = useState({ numero: "", servico_id: "", nome_cliente: "", observacoes: "", prioridade: 2 });
+  const [savingAtend, setSavingAtend] = useState(false);
+  const [modalPuxarOpen, setModalPuxarOpen] = useState(false);
+  const [protocoloPuxar, setProtocoloPuxar] = useState(null);
+
   // Ver relatório financeiro
   const [verRelatorioFinanceiro, setVerRelatorioFinanceiro] = useState(false);
 
@@ -572,6 +584,111 @@ export default function Protocolos({ usuario }) {
     carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fStatus, fResp]);
+
+  // ===== FILA DE ATENDIMENTO =====
+  const carregarFila = async () => {
+    setLoadingFila(true);
+    try {
+      const token = localStorage.getItem("token");
+      const resp = await fetch(`${API_URL}/protocolos?status=aguardando`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await resp.json();
+      setFila(Array.isArray(data) ? data : []);
+    } catch {
+      setFila([]);
+    } finally {
+      setLoadingFila(false);
+    }
+  };
+
+  const abrirFila = () => {
+    setVerFila(true);
+    carregarFila();
+  };
+
+  const abrirModalAtendimento = () => {
+    setFormAtend({ numero: "", servico_id: servicos?.[0]?.id ? String(servicos[0].id) : "", nome_cliente: "", observacoes: "", prioridade: 2 });
+    setModalAtendOpen(true);
+  };
+
+  const salvarAtendimento = async (e) => {
+    e.preventDefault();
+    if (!formAtend.numero || !formAtend.servico_id) {
+      setErro("Preencha número e serviço");
+      return;
+    }
+    setSavingAtend(true);
+    try {
+      const token = localStorage.getItem("token");
+      const resp = await fetch(`${API_URL}/protocolos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          numero: formAtend.numero,
+          servico_id: Number(formAtend.servico_id),
+          responsavel_id: Number(usuario?.id),
+          data_entrada: todayISO(),
+          nome_cliente: formAtend.nome_cliente,
+          observacoes: formAtend.observacoes,
+          prioridade: Number(formAtend.prioridade),
+          status: "aguardando",
+          tem_orcamento: false,
+        }),
+      });
+
+      if (resp.status === 409) {
+        const data = await resp.json();
+        // Protocolo já existe — perguntar se quer puxar
+        if (data.code === "PROTOCOLO_EM_ANDAMENTO" || data.code === "PROTOCOLO_CONCLUIDO") {
+          setProtocoloPuxar({ ...data, numero: formAtend.numero });
+          setModalPuxarOpen(true);
+          setModalAtendOpen(false);
+          setSavingAtend(false);
+          return;
+        }
+        throw new Error(data.message || "Erro");
+      }
+      if (!resp.ok) {
+        const data = await resp.json();
+        // Protocolo aguardando — perguntar se quer puxar
+        if (data.code === "PROTOCOLO_AGUARDANDO") {
+          setProtocoloPuxar({ ...data, numero: formAtend.numero });
+          setModalPuxarOpen(true);
+          setModalAtendOpen(false);
+          setSavingAtend(false);
+          return;
+        }
+        throw new Error(data.message || "Erro ao criar");
+      }
+
+      setModalAtendOpen(false);
+      carregarFila();
+      carregar();
+    } catch (e) {
+      setErro(e?.message || "Erro ao enviar para fila");
+    } finally {
+      setSavingAtend(false);
+    }
+  };
+
+  const puxarProtocolo = async (protocoloId) => {
+    try {
+      const token = localStorage.getItem("token");
+      const resp = await fetch(`${API_URL}/protocolos/${protocoloId}/transferir`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ novo_responsavel_id: usuario?.id, puxar_fila: true }),
+      });
+      if (!resp.ok) throw new Error("Erro ao puxar protocolo");
+      setModalPuxarOpen(false);
+      setProtocoloPuxar(null);
+      carregarFila();
+      carregar();
+    } catch (e) {
+      setErro(e?.message || "Erro ao puxar protocolo");
+    }
+  };
 
   const filtrados = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -1012,6 +1129,19 @@ export default function Protocolos({ usuario }) {
               onClick={abrirNovo}
             >
               ➕ Novo Protocolo
+            </button>
+
+            <button
+              className="btn-moderno"
+              style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)", color: "white", boxShadow: "0 4px 12px rgba(245,158,11,0.25)", position: "relative" }}
+              onClick={abrirFila}
+            >
+              🎫 Fila de Atendimento
+              {fila.length > 0 && (
+                <span style={{ position: "absolute", top: -6, right: -6, background: "#ef4444", color: "white", borderRadius: "50%", width: 20, height: 20, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {fila.length}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -1690,6 +1820,156 @@ export default function Protocolos({ usuario }) {
                 onClick={fecharModalNotas}
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== TELA FILA DE ATENDIMENTO ===== */}
+      {verFila && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }}>
+          <div style={{ width: "min(640px, 100vw)", height: "100vh", background: "white", display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
+            {/* Header */}
+            <div style={{ padding: "1.5rem", borderBottom: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center", background: "linear-gradient(135deg, #fffbeb, #fef3c7)" }}>
+              <div>
+                <h2 style={{ margin: 0, color: "#92400e", fontSize: "1.25rem" }}>🎫 Fila de Atendimento</h2>
+                <p style={{ margin: 0, color: "#a16207", fontSize: 13 }}>{fila.length} protocolo(s) aguardando</p>
+              </div>
+              <div style={{ display: "flex", gap: "0.75rem" }}>
+                <button className="btn btn-primary" onClick={abrirModalAtendimento}>➕ Novo na Fila</button>
+                <button className="btn btn-secondary" onClick={() => setVerFila(false)}>✕ Fechar</button>
+              </div>
+            </div>
+
+            {/* Lista */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "1rem" }}>
+              {loadingFila ? (
+                <div style={{ textAlign: "center", padding: "3rem", color: "#94a3b8" }}>Carregando...</div>
+              ) : fila.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "3rem" }}>
+                  <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>✅</div>
+                  <div style={{ color: "#64748b", fontWeight: 600 }}>Fila vazia! Nenhum protocolo aguardando.</div>
+                </div>
+              ) : (
+                fila.map((p) => {
+                  const cfg = PRIORIDADE_CONFIG[p.prioridade] || PRIORIDADE_CONFIG[2];
+                  return (
+                    <div key={p.id} style={{
+                      border: `1px solid ${p.prioridade === 3 ? "#fca5a5" : "#e5e7eb"}`,
+                      borderLeft: `4px solid ${cfg.cor}`,
+                      borderRadius: 12,
+                      padding: "1rem 1.25rem",
+                      marginBottom: "0.75rem",
+                      background: p.prioridade === 3 ? "#fff8f8" : "white",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "1rem",
+                    }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: 4 }}>
+                          <strong style={{ fontSize: 16 }}>#{p.numero}</strong>
+                          <span style={{ padding: "0.15rem 0.5rem", borderRadius: 99, background: cfg.bg, color: cfg.cor, fontSize: 11, fontWeight: 700 }}>
+                            {cfg.emoji} {cfg.label}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 13, color: "#64748b" }}>{p.servico_nome}</div>
+                        {p.nome_cliente && <div style={{ fontSize: 13, color: "#374151", fontWeight: 500, marginTop: 2 }}>👤 {p.nome_cliente}</div>}
+                        {p.observacoes && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2, fontStyle: "italic" }}>{p.observacoes}</div>}
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Entrada: {String(p.data_entrada).slice(0, 10)}</div>
+                      </div>
+                      <button
+                        className="btn btn-primary"
+                        style={{ whiteSpace: "nowrap", background: "linear-gradient(135deg, #f59e0b, #d97706)" }}
+                        onClick={() => { setProtocoloPuxar(p); setModalPuxarOpen(true); }}
+                      >
+                        📥 Puxar
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal Novo na Fila (Atendimento) ===== */}
+      {modalAtendOpen && (
+        <div className="modal-overlay" onClick={() => setModalAtendOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, zIndex: 1200 }}>
+            <h2>🎫 Enviar Protocolo para Fila</h2>
+
+            <div className="form-group">
+              <label className="form-label">Número do Protocolo *</label>
+              <input className="form-input" value={formAtend.numero} onChange={(e) => setFormAtend({ ...formAtend, numero: e.target.value })} placeholder="Ex: 216500" />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Serviço *</label>
+              <select className="form-select" value={formAtend.servico_id} onChange={(e) => setFormAtend({ ...formAtend, servico_id: e.target.value })}>
+                <option value="">Selecione...</option>
+                {servicos.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Nome do Cliente</label>
+              <input className="form-input" value={formAtend.nome_cliente} onChange={(e) => setFormAtend({ ...formAtend, nome_cliente: e.target.value })} placeholder="Nome do solicitante" />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Prioridade</label>
+              <div style={{ display: "flex", gap: "0.75rem" }}>
+                {[1, 2, 3].map((nivel) => {
+                  const cfg = PRIORIDADE_CONFIG[nivel];
+                  const ativo = Number(formAtend.prioridade) === nivel;
+                  return (
+                    <button key={nivel} type="button" onClick={() => setFormAtend({ ...formAtend, prioridade: nivel })}
+                      style={{ flex: 1, padding: "0.6rem", borderRadius: 10, border: ativo ? `2px solid ${cfg.cor}` : "2px solid #e5e7eb", background: ativo ? cfg.bg : "white", color: ativo ? cfg.cor : "#6b7280", fontWeight: ativo ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
+                      {cfg.emoji} {cfg.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Observações</label>
+              <textarea className="form-input" rows="2" value={formAtend.observacoes} onChange={(e) => setFormAtend({ ...formAtend, observacoes: e.target.value })} placeholder="Informações adicionais..." />
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setModalAtendOpen(false)}>Cancelar</button>
+              <button type="button" className="btn btn-primary" onClick={salvarAtendimento} disabled={savingAtend} style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)" }}>
+                {savingAtend ? "Enviando..." : "🎫 Enviar para Fila"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal Puxar Protocolo ===== */}
+      {modalPuxarOpen && protocoloPuxar && (
+        <div className="modal-overlay" onClick={() => setModalPuxarOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440, zIndex: 1200 }}>
+            <div style={{ textAlign: "center", marginBottom: "1rem" }}>
+              <span style={{ fontSize: "3rem" }}>📥</span>
+            </div>
+            <h2 style={{ textAlign: "center", marginBottom: "0.5rem" }}>Puxar Protocolo</h2>
+            <p style={{ textAlign: "center", color: "#64748b", fontSize: 14, marginBottom: "1.5rem" }}>
+              Protocolo <strong>#{protocoloPuxar.numero || protocoloPuxar.id}</strong>
+              {protocoloPuxar.nome_cliente && <> — <strong>{protocoloPuxar.nome_cliente}</strong></>}
+              <br />Deseja puxar este protocolo para você?
+            </p>
+            <div style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 8, padding: "0.75rem 1rem", marginBottom: "1.5rem", fontSize: 13, color: "#1e40af" }}>
+              💡 O protocolo irá para <strong>Em andamento</strong> e ficará visível na sua lista.
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => { setModalPuxarOpen(false); setProtocoloPuxar(null); }}>Cancelar</button>
+              <button type="button" className="btn btn-primary" onClick={() => puxarProtocolo(protocoloPuxar.protocolo_id || protocoloPuxar.id)} style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)" }}>
+                📥 Sim, puxar protocolo
               </button>
             </div>
           </div>

@@ -222,6 +222,7 @@ function Funcionarios() {
                   <option value="Supervisor">Supervisor</option>
                   <option value="Escrevente">Coordenador</option>
                   <option value="Auxiliar">Registrador</option>
+                  <option value="Atendente">Atendente</option>
                 </select>
               </div>
 

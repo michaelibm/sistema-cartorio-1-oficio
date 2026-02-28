@@ -9,6 +9,8 @@ import Funcionarios from './pages/Funcionarios';
 import Relatorios from './pages/Relatorios';
 import Configuracoes from './pages/Configuracoes';
 import Painel from './pages/Painel';
+import FilaAtendimento from './pages/FilaAtendimento';
+import FilaRegistrador from './pages/FilaRegistrador';
 
 import Sidebar from './components/Sidebar';
 import './styles/App.css';
@@ -68,6 +70,23 @@ function App() {
     return <Login onLogin={handleLogin} />;
   }
 
+  // Atendente: tela exclusiva do balcão
+  if (usuario.cargo === 'Atendente') {
+    return (
+      <Router>
+        <div className="app">
+          <Sidebar usuario={usuario} onLogout={handleLogout} onToggle={setSidebarCollapsed} />
+          <main className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+            <Routes>
+              <Route path="/" element={<FilaAtendimento usuario={usuario} />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+        </div>
+      </Router>
+    );
+  }
+
   return (
     <Router>
       <div className="app">
@@ -80,6 +99,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard usuario={usuario} />} />
             <Route path="/protocolos" element={<Protocolos usuario={usuario} />} />
+            <Route path="/fila" element={<FilaRegistrador usuario={usuario} />} />
             <Route path="/servicos" element={<Servicos usuario={usuario} />} />
             <Route path="/funcionarios" element={<Funcionarios usuario={usuario} />} />
             <Route path="/relatorios" element={<Relatorios usuario={usuario} />} />
