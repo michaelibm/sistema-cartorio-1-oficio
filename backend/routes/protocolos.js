@@ -810,7 +810,11 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
 router.post('/:id/reabrir', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { novo_responsavel_id } = req.body;
+    const { novo_responsavel_id, novo_servico_id } = req.body;
+
+    if (!novo_servico_id) {
+      return res.status(400).json({ message: 'Selecione o novo serviço para reabrir o protocolo.' });
+    }
 
     const protocolo = await pool.query(
       'SELECT id, numero, responsavel_id, status FROM protocolos WHERE id = $1',
@@ -830,13 +834,29 @@ router.post('/:id/reabrir', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Responsável não encontrado' });
     }
 
-    // Reabrir: status volta pra andamento, novo responsável, limpa data_conclusao
-    // Mantém data_conclusao do responsável anterior para não perder produtividade
+    // Buscar prazo do novo serviço
+    const servico = await pool.query('SELECT id, nome, prazo, tipo_prazo FROM servicos WHERE id = $1', [novo_servico_id]);
+    if (!servico.rows.length) {
+      return res.status(404).json({ message: 'Serviço não encontrado' });
+    }
+    const s = servico.rows[0];
+
+    // Recalcular vencimento a partir de hoje com novo serviço
+    const hoje = new Date().toISOString().split('T')[0];
+    const novaDataVencimento = await calcularDataVencimento(hoje, s.prazo, s.tipo_prazo);
+
+    // Reabrir: novo serviço, nova data entrada/vencimento, status andamento, limpa conclusao
     await pool.query(
       `UPDATE protocolos 
-       SET status = 'andamento', responsavel_id = $1, data_conclusao = NULL, updated_at = NOW()
-       WHERE id = $2`,
-      [novo_responsavel_id, id]
+       SET status = 'andamento', 
+           responsavel_id = $1, 
+           servico_id = $2,
+           data_entrada = $3,
+           data_vencimento = $4,
+           data_conclusao = NULL, 
+           updated_at = NOW()
+       WHERE id = $5`,
+      [novo_responsavel_id, novo_servico_id, hoje, novaDataVencimento, id]
     );
 
     // Registrar no histórico
@@ -845,13 +865,52 @@ router.post('/:id/reabrir', authMiddleware, async (req, res) => {
     await pool.query(
       `INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at)
        VALUES ($1, $2, 'reabertura', $3, NOW())`,
-      [id, req.user.id, `Protocolo reaberto por ${nomeNovo}. Conclusão anterior por ${nomeAnterior} mantida no histórico.`]
+      [id, req.user.id, `Protocolo reaberto por ${nomeNovo} com serviço "${s.nome}". Novo vencimento: ${novaDataVencimento}. Conclusão anterior por ${nomeAnterior} mantida no histórico.`]
     );
 
     res.json({ message: 'Protocolo reaberto com sucesso' });
   } catch (error) {
     console.error('Erro ao reabrir protocolo:', error);
     res.status(500).json({ message: 'Erro ao reabrir protocolo' });
+  }
+});
+
+// Verificar se protocolo ja existe por numero (para validacao em tempo real)
+router.get('/verificar/:numero', authMiddleware, async (req, res) => {
+  try {
+    const { numero } = req.params;
+    if (!numero || numero.length < 2) return res.json({ existe: false });
+
+    const result = await pool.query(
+      `SELECT p.id, p.numero, p.status, p.responsavel_id,
+              u.nome as responsavel_nome, s.nome as servico_nome
+       FROM protocolos p
+       JOIN usuarios u ON p.responsavel_id = u.id
+       JOIN servicos s ON p.servico_id = s.id
+       WHERE p.numero = $1
+       LIMIT 1`,
+      [numero]
+    );
+
+    if (!result.rows.length) return res.json({ existe: false });
+
+    const p = result.rows[0];
+    const statusLower = (p.status || '').toLowerCase();
+    const code = statusLower === 'concluido' ? 'PROTOCOLO_CONCLUIDO' :
+                 statusLower === 'aguardando' ? 'PROTOCOLO_AGUARDANDO' :
+                 'PROTOCOLO_EM_ANDAMENTO';
+
+    return res.json({
+      existe: true,
+      id: p.id,
+      status: p.status,
+      responsavel_nome: p.responsavel_nome,
+      servico_nome: p.servico_nome,
+      code,
+    });
+  } catch (error) {
+    console.error('Erro ao verificar protocolo:', error);
+    res.status(500).json({ message: 'Erro ao verificar' });
   }
 });
 

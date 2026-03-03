@@ -17,17 +17,19 @@ import {
 } from "../services/api";
 
 const statusLabel = (s) => {
-  if (s === "andamento")  return "Em andamento";
-  if (s === "concluido")  return "Concluído";
-  if (s === "cancelado")  return "Cancelado";
-  if (s === "aguardando") return "Aguardando";
+  const sl = (s || "").toLowerCase();
+  if (sl === "andamento")           return "Em andamento";
+  if (sl === "concluido" || sl === "concluído") return "Concluído";
+  if (sl === "cancelado")           return "Cancelado";
+  if (sl === "aguardando")          return "Aguardando";
   return s;
 };
 
 const statusBadgeClass = (s) => {
-  if (s === "concluido")  return "badge-moderno badge-success-moderno";
-  if (s === "cancelado")  return "badge-moderno badge-danger-moderno";
-  if (s === "aguardando") return "badge-moderno badge-warning-moderno";
+  const sl = (s || "").toLowerCase();
+  if (sl === "concluido" || sl === "concluído") return "badge-moderno badge-success-moderno";
+  if (sl === "cancelado")           return "badge-moderno badge-danger-moderno";
+  if (sl === "aguardando")          return "badge-moderno badge-warning-moderno";
   return "badge-moderno badge-info-moderno";
 };
 
@@ -83,7 +85,7 @@ const PRIORIDADE_CONFIG = {
 };
 
 const corLinha = (p) => {
-  if (p.status === "concluido" || p.status === "cancelado") return {};
+  if (["concluido","concluído","cancelado"].includes((p.status||"").toLowerCase())) return {};
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const venc = new Date(p.data_vencimento); venc.setHours(0, 0, 0, 0);
   const diff = Math.ceil((venc - hoje) / (1000 * 60 * 60 * 24));
@@ -560,6 +562,8 @@ export default function Protocolos({ usuario }) {
   // Conflito de protocolo existente
   const [modalConflitoOpen, setModalConflitoOpen] = useState(false);
   const [conflitoInfo, setConflitoInfo] = useState(null); // { code, message, protocolo_id, responsavel_nome, status }
+  const [verificandoNumero, setVerificandoNumero] = useState(false);
+  const [numeroStatus, setNumeroStatus] = useState(null);
 
   // Modal Notas e Histórico
   const [modalNotasOpen, setModalNotasOpen] = useState(false);
@@ -775,6 +779,7 @@ export default function Protocolos({ usuario }) {
     setEditId(null);
     setSaving(false);
     setErro("");
+    setNumeroStatus(null);
   };
 
   const salvar = async (e) => {
@@ -921,6 +926,30 @@ export default function Protocolos({ usuario }) {
     }
   };
 
+
+  const verificarNumero = async (numero) => {
+    if (!numero || numero.length < 2 || editId) return;
+    setVerificandoNumero(true);
+    setNumeroStatus(null);
+    try {
+      const token = localStorage.getItem("token");
+      const resp = await fetch(`${API_URL}/protocolos/verificar/${encodeURIComponent(numero)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await resp.json();
+      if (!data.existe) { setNumeroStatus("novo"); return; }
+      setNumeroStatus("existente");
+      setConflitoInfo({
+        code: data.code,
+        protocolo_id: data.id,
+        responsavel_nome: data.responsavel_nome,
+        solicitante_id: Number(form.responsavel_id) || Number(usuario?.id),
+        novo_servico_id: "",
+      });
+      setModalConflitoOpen(true);
+    } catch { /* silencioso */ } finally { setVerificandoNumero(false); }
+  };
+
   const confirmarReabertura = async () => {
     if (!conflitoInfo) return;
     setTransfSaving(true);
@@ -929,7 +958,7 @@ export default function Protocolos({ usuario }) {
       const resp = await fetch(`${API_URL}/protocolos/${conflitoInfo.protocolo_id}/reabrir`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ novo_responsavel_id: conflitoInfo.solicitante_id }),
+        body: JSON.stringify({ novo_responsavel_id: conflitoInfo.solicitante_id, novo_servico_id: conflitoInfo.novo_servico_id }),
       });
       if (!resp.ok) {
         const data = await resp.json();
@@ -1253,7 +1282,7 @@ export default function Protocolos({ usuario }) {
                         const hoje = new Date(); hoje.setHours(0,0,0,0);
                         const venc = new Date(p.data_vencimento); venc.setHours(0,0,0,0);
                         const diff = Math.ceil((venc - hoje) / (1000 * 60 * 60 * 24));
-                        const isAtivo = p.status !== "concluido" && p.status !== "cancelado";
+                        const isAtivo = !["concluido","concluído","cancelado"].includes((p.status||"").toLowerCase());
                         return (
                           <span style={{
                             fontWeight: isAtivo && diff < 0 ? 700 : isAtivo && diff <= 3 ? 600 : "normal",
@@ -1284,13 +1313,15 @@ export default function Protocolos({ usuario }) {
                     </td>
                     <td>
                       <div className="acoes-container">
-                        <button
-                          className="btn-action btn-action-edit"
-                          onClick={() => abrirEdicao(p)}
-                          title="Editar"
-                        >
-                          ✏️
-                        </button>
+                        {(usuario?.cargo === "Supervisor" || usuario?.cargo === "Coordenador") && (
+                          <button
+                            className="btn-action btn-action-edit"
+                            onClick={() => abrirEdicao(p)}
+                            title="Editar"
+                          >
+                            ✏️
+                          </button>
+                        )}
                         {(p.status === "andamento" ||
                           p.status === "concluido") && (
                           <button
@@ -1359,16 +1390,23 @@ export default function Protocolos({ usuario }) {
             <form onSubmit={salvar} onKeyDown={handleEnterKey}>
               <div className="form-group">
                 <label htmlFor="numero">Número</label>
-                <input
-                  type="text"
-                  id="numero"
-                  className="form-input"
-                  value={form.numero}
-                  onChange={(e) => setForm({ ...form, numero: e.target.value })}
-                  placeholder="Ex: 2026-000123"
-                  disabled={!!editId && usuario?.cargo === "Registrador"}
-                  required
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="text"
+                    id="numero"
+                    className="form-input"
+                    value={form.numero}
+                    onChange={(e) => { setForm({ ...form, numero: e.target.value }); setNumeroStatus(null); }}
+                    onBlur={(e) => verificarNumero(e.target.value)}
+                    placeholder="Ex: 2026-000123"
+                    disabled={!!editId && usuario?.cargo === "Registrador"}
+                    required
+                    style={{ borderColor: numeroStatus === "existente" ? "#f59e0b" : numeroStatus === "novo" ? "#10b981" : undefined }}
+                  />
+                  {verificandoNumero && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#94a3b8" }}>⏳</span>}
+                  {!verificandoNumero && numeroStatus === "novo" && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#10b981", fontWeight: 600 }}>✓ Novo</span>}
+                  {!verificandoNumero && numeroStatus === "existente" && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#f59e0b", fontWeight: 600 }}>⚠️ Já existe</span>}
+                </div>
               </div>
 
               <div className="form-group">
@@ -2027,10 +2065,23 @@ export default function Protocolos({ usuario }) {
                 <h2 style={{ textAlign: 'center', color: '#1e293b', marginBottom: '0.5rem' }}>Protocolo já concluído</h2>
                 <p style={{ textAlign: 'center', color: '#64748b', marginBottom: '1.5rem', fontSize: 14 }}>
                   Este protocolo foi concluído pelo registrador <strong>{conflitoInfo.responsavel_nome}</strong>.
-                  <br />Deseja reabri-lo e assumir a responsabilidade?
+                  <br />Selecione o novo serviço para reabri-lo.
                 </p>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ fontWeight: 600, fontSize: 14, color: '#374151', display: 'block', marginBottom: 6 }}>Novo Serviço *</label>
+                  <select
+                    className="form-select"
+                    value={conflitoInfo.novo_servico_id || ""}
+                    onChange={(e) => setConflitoInfo({ ...conflitoInfo, novo_servico_id: e.target.value })}
+                  >
+                    <option value="">Selecione o serviço...</option>
+                    {servicos.map((s) => (
+                      <option key={s.id} value={s.id}>{s.nome}</option>
+                    ))}
+                  </select>
+                </div>
                 <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1.5rem', fontSize: 13, color: '#92400e' }}>
-                  ⚠️ A produtividade de <strong>{conflitoInfo.responsavel_nome}</strong> será mantida. O protocolo voltará ao seu status <strong>Em andamento</strong> sob sua responsabilidade.
+                  ⚠️ A produtividade de <strong>{conflitoInfo.responsavel_nome}</strong> será mantida. O prazo será recalculado com base no novo serviço.
                 </div>
                 <div className="modal-actions">
                   <button type="button" className="btn btn-secondary" onClick={() => setModalConflitoOpen(false)}>
@@ -2040,7 +2091,7 @@ export default function Protocolos({ usuario }) {
                     type="button"
                     className="btn btn-primary"
                     onClick={confirmarReabertura}
-                    disabled={transfSaving}
+                    disabled={transfSaving || !conflitoInfo.novo_servico_id}
                     style={{ background: '#10b981' }}
                   >
                     {transfSaving ? "Reabrindo..." : "✔ Sim, reabrir protocolo"}
