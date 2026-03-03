@@ -49,9 +49,9 @@ function iniciarAlertasAutomaticos() {
   });
 
   console.log('[CRON] ✓ Sistema de alertas configurado com sucesso!');
-  console.log('[CRON] - Verificação diária: 8:00 AM');
-  console.log('[CRON] - Relatório atrasados: 9:00 AM (seg-sex)');
-  console.log('[CRON] - Verificações rápidas: a cada 2h (8h-18h, seg-sex)');
+  console.log('[CRON] - Verificação diária: 7:00 AM');
+  console.log('[CRON] - Relatório atrasados: 8:00 AM (seg-sex)');
+  console.log('[CRON] - Verificações rápidas: a cada 7h (8h-18h, seg-sex)');
 }
 
 /**
