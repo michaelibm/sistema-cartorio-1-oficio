@@ -58,7 +58,14 @@ const handleEnterKey = (e) => {
 const formatDateTime = (dt) => {
   if (!dt) return "";
   const d = new Date(dt);
-  return d.toLocaleString("pt-BR");
+  // Converter para horário de Manaus (UTC-4)
+  const utc = d.getTime() + d.getTimezoneOffset() * 60000;
+  const manaus = new Date(utc + (-4 * 60) * 60000);
+  return manaus.toLocaleString("pt-BR", {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+    hour12: false,
+  });
 };
 
 const formatMoeda = (valor) => {
@@ -474,6 +481,21 @@ function RelatorioFinanceiro({ funcionarios, onVoltar }) {
 // ============================================================
 // COMPONENTE PRINCIPAL PROTOCOLOS
 // ============================================================
+
+// Fuso horário de Manaus (UTC-4, sem horário de verão)
+const MANAUS_OFFSET = -4 * 60; // minutos
+const agoraManaus = () => {
+  const agora = new Date();
+  const utc = agora.getTime() + agora.getTimezoneOffset() * 60000;
+  return new Date(utc + MANAUS_OFFSET * 60000);
+};
+const formatarDataHoraManaus = (date) =>
+  date.toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+
 export default function Protocolos({ usuario }) {
   const [itens, setItens] = useState([]);
   const [servicos, setServicos] = useState([]);
@@ -481,6 +503,12 @@ export default function Protocolos({ usuario }) {
   const [statusList, setStatusList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
+  const [horaAtual, setHoraAtual] = useState(agoraManaus());
+
+  useEffect(() => {
+    const interval = setInterval(() => setHoraAtual(agoraManaus()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fila de atendimento
   const [verFila, setVerFila] = useState(false);
@@ -1043,11 +1071,22 @@ export default function Protocolos({ usuario }) {
 
   return (
     <div className="protocolos-container">
-      <div className="protocolos-header">
-        <h1 className="protocolos-title">Protocolos</h1>
-        <p className="protocolos-subtitle">
-          Cadastro, acompanhamento e conclusão de protocolos.
-        </p>
+      <div className="protocolos-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div>
+          <h1 className="protocolos-title">Protocolos</h1>
+          <p className="protocolos-subtitle">
+            Cadastro, acompanhamento e conclusão de protocolos.
+          </p>
+        </div>
+        {/* Relógio de Manaus */}
+        <div style={{ background: 'white', borderRadius: '10px', padding: '0.625rem 1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', textAlign: 'right', borderLeft: '4px solid #3b82f6', alignSelf: 'flex-start' }}>
+          <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', marginBottom: '0.125rem' }}>
+            🕐 Manaus (UTC-4)
+          </div>
+          <div style={{ fontSize: '1rem', fontWeight: '700', color: '#1f2937', fontVariantNumeric: 'tabular-nums' }}>
+            {formatarDataHoraManaus(horaAtual)}
+          </div>
+        </div>
       </div>
 
       {erro && (
