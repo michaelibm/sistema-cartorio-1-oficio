@@ -578,6 +578,51 @@ export default function Protocolos({ usuario }) {
   const [enviandoAlertas, setEnviandoAlertas] = useState(false);
   const [resultadoAlertas, setResultadoAlertas] = useState(null);
 
+  // Modal Orçamento/Prioridade (Registrador)
+  const [modalOrcamentoOpen, setModalOrcamentoOpen] = useState(false);
+  const [protocoloOrcamentoSel, setProtocoloOrcamentoSel] = useState(null);
+  const [formOrcamento, setFormOrcamento] = useState({ tem_orcamento: false, orcamento_valor: "", prioridade: 2 });
+  const [savingOrcamento, setSavingOrcamento] = useState(false);
+
+  const abrirModalOrcamento = (p) => {
+    setProtocoloOrcamentoSel(p);
+    setFormOrcamento({
+      tem_orcamento: !!p.tem_orcamento,
+      orcamento_valor: p.orcamento_valor ? String(p.orcamento_valor) : "",
+      prioridade: p.prioridade ?? 2,
+    });
+    setModalOrcamentoOpen(true);
+  };
+
+  const fecharModalOrcamento = () => {
+    setModalOrcamentoOpen(false);
+    setProtocoloOrcamentoSel(null);
+    setSavingOrcamento(false);
+  };
+
+  const salvarOrcamento = async (e) => {
+    e.preventDefault();
+    if (formOrcamento.tem_orcamento && (!formOrcamento.orcamento_valor || parseFloat(formOrcamento.orcamento_valor) <= 0)) {
+      setErro("Informe o valor do orçamento");
+      return;
+    }
+    setSavingOrcamento(true);
+    setErro("");
+    try {
+      await updateProtocolo(protocoloOrcamentoSel.id, {
+        tem_orcamento: formOrcamento.tem_orcamento,
+        orcamento_valor: formOrcamento.tem_orcamento ? parseFloat(formOrcamento.orcamento_valor) : null,
+        prioridade: Number(formOrcamento.prioridade),
+      });
+      fecharModalOrcamento();
+      await carregar();
+    } catch (e) {
+      setErro(e?.message || "Erro ao salvar");
+    } finally {
+      setSavingOrcamento(false);
+    }
+  };
+
   const setorResponsavel = useMemo(() => {
     const id = Number(form.responsavel_id);
     if (!id) return "";
@@ -1358,6 +1403,15 @@ export default function Protocolos({ usuario }) {
                             🔄
                           </button>
                         )}
+                        {usuario?.cargo === "Registrador" && (
+                          <button
+                            className="btn-action btn-action-edit"
+                            onClick={() => abrirModalOrcamento(p)}
+                            title="Editar orçamento e prioridade"
+                          >
+                            💰
+                          </button>
+                        )}
                         <button
                           className="btn-action btn-action-edit"
                           onClick={() => abrirModalNotas(p)}
@@ -2119,6 +2173,92 @@ export default function Protocolos({ usuario }) {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal Orçamento/Prioridade (Registrador) ===== */}
+      {modalOrcamentoOpen && protocoloOrcamentoSel && (
+        <div className="modal-overlay" onClick={fecharModalOrcamento}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <h2>💰 Orçamento e Prioridade</h2>
+            <p style={{ color: "#64748b", fontSize: 14, marginBottom: "1.25rem" }}>
+              Protocolo <strong>{protocoloOrcamentoSel.numero}</strong>
+            </p>
+
+            <form onSubmit={salvarOrcamento}>
+              {/* Prioridade */}
+              <div className="form-group">
+                <label>Prioridade</label>
+                <div style={{ display: "flex", gap: "0.75rem" }}>
+                  {[1, 2, 3].map((nivel) => {
+                    const cfg = PRIORIDADE_CONFIG[nivel];
+                    const ativo = Number(formOrcamento.prioridade) === nivel;
+                    return (
+                      <button
+                        key={nivel}
+                        type="button"
+                        onClick={() => setFormOrcamento({ ...formOrcamento, prioridade: nivel })}
+                        style={{
+                          flex: 1, padding: "0.6rem", borderRadius: 10,
+                          border: ativo ? `2px solid ${cfg.cor}` : "2px solid #e5e7eb",
+                          background: ativo ? cfg.bg : "white",
+                          color: ativo ? cfg.cor : "#6b7280",
+                          fontWeight: ativo ? 700 : 500, fontSize: 13, cursor: "pointer",
+                        }}
+                      >
+                        {cfg.emoji} {cfg.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Orçamento */}
+              <div className="form-group">
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={formOrcamento.tem_orcamento}
+                    onChange={(e) => setFormOrcamento({ ...formOrcamento, tem_orcamento: e.target.checked, orcamento_valor: "" })}
+                    style={{ width: 16, height: 16 }}
+                  />
+                  <span style={{ fontWeight: 600 }}>💰 Possui Orçamento</span>
+                </label>
+              </div>
+
+              {formOrcamento.tem_orcamento && (
+                <div className="form-group">
+                  <label htmlFor="orc-valor">Valor do Orçamento (R$)</label>
+                  <input
+                    type="number"
+                    id="orc-valor"
+                    className="form-input"
+                    value={formOrcamento.orcamento_valor}
+                    onChange={(e) => setFormOrcamento({ ...formOrcamento, orcamento_valor: e.target.value })}
+                    placeholder="Ex: 1500.00"
+                    min="0.01"
+                    step="0.01"
+                    required
+                    style={{ borderColor: "#10b981" }}
+                  />
+                  {formOrcamento.orcamento_valor && (
+                    <small style={{ color: "#059669", marginTop: "0.25rem", display: "block" }}>
+                      {formatMoeda(parseFloat(formOrcamento.orcamento_valor))}
+                    </small>
+                  )}
+                </div>
+              )}
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={fecharModalOrcamento}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={savingOrcamento}>
+                  {savingOrcamento ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
