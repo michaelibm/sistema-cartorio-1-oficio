@@ -2,7 +2,7 @@
 
 // frontend/src/services/api.js
 export const API_URL = 
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "http://192.168.0.95:5000/api";
 
 
 function getToken() {
@@ -385,7 +385,4 @@ export default {
   getProtocolosVencendo,
   getProtocolosAtrasados,
   getHistoricoProtocolo,
-  iniciarSessao,
-  pausarSessao,
-  getSessoesAtivas,
 };
