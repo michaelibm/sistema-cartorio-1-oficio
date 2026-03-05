@@ -2,7 +2,7 @@
 
 // frontend/src/services/api.js
 export const API_URL = 
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 
 function getToken() {
@@ -328,6 +328,31 @@ export const getHistoricoProtocolo = async (protocoloId) => {
   return handleResponse(response);
 };
 
+// SESSÕES DE TRABALHO
+export const iniciarSessao = async (protocoloId) => {
+  const response = await fetch(`${API_URL}/protocolos/${protocoloId}/iniciar`, {
+    method: 'POST',
+    headers: getAuthHeader(),
+  });
+  return handleResponse(response);
+};
+
+export const pausarSessao = async (protocoloId, nota) => {
+  const response = await fetch(`${API_URL}/protocolos/${protocoloId}/pausar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ nota }),
+  });
+  return handleResponse(response);
+};
+
+export const getSessoesAtivas = async () => {
+  const response = await fetch(`${API_URL}/protocolos/minhas-sessoes`, {
+    headers: getAuthHeader(),
+  });
+  return handleResponse(response);
+};
+
 // Export default
 export default {
   login,
@@ -360,4 +385,7 @@ export default {
   getProtocolosVencendo,
   getProtocolosAtrasados,
   getHistoricoProtocolo,
+  iniciarSessao,
+  pausarSessao,
+  getSessoesAtivas,
 };

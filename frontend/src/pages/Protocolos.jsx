@@ -568,6 +568,13 @@ export default function Protocolos({ usuario }) {
   const [verificandoNumero, setVerificandoNumero] = useState(false);
   const [numeroStatus, setNumeroStatus] = useState(null);
 
+  // Sessões de trabalho
+  const [sessoesAtivas, setSessoesAtivas] = useState([]); // ids de protocolos com sessão ativa
+  const [modalPausaOpen, setModalPausaOpen] = useState(false);
+  const [protocoloPausaSel, setProtocoloPausaSel] = useState(null);
+  const [notaPausa, setNotaPausa] = useState("");
+  const [salvandoSessao, setSalvandoSessao] = useState(false);
+
   // Modal Notas e Histórico
   const [modalNotasOpen, setModalNotasOpen] = useState(false);
   const [protocoloNotasSel, setProtocoloNotasSel] = useState(null);
@@ -666,67 +673,11 @@ export default function Protocolos({ usuario }) {
   }, [fStatus, fResp]);
 
   // ===== SESSÕES DE TRABALHO =====
-  const [sessoesAtivas, setSessoesAtivas] = useState([]); // protocolo_ids com sessão ativa
-  const [modalPausaOpen, setModalPausaOpen] = useState(false);
-  const [protocoloPausaSel, setProtocoloPausaSel] = useState(null);
-  const [notaPausa, setNotaPausa] = useState("");
-  const [salvandoSessao, setSalvandoSessao] = useState(false);
 
-  const carregarSessoes = async () => {
-    try {
-      const data = await getSessoesAtivas();
-      setSessoesAtivas(Array.isArray(data) ? data.map((s) => s.protocolo_id) : []);
-    } catch { /* silencioso */ }
-  };
 
-  useEffect(() => {
-    if (usuario?.cargo === "Registrador") carregarSessoes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  const handleIniciarSessao = async (p) => {
-    setSalvandoSessao(true);
-    setErro("");
-    try {
-      await iniciarSessao(p.id);
-      await carregarSessoes();
-    } catch (e) {
-      setErro(e?.message || "Erro ao iniciar sessão");
-    } finally {
-      setSalvandoSessao(false);
-    }
-  };
 
-  const abrirModalPausa = (p) => {
-    setProtocoloPausaSel(p);
-    setNotaPausa("");
-    setModalPausaOpen(true);
-  };
 
-  const fecharModalPausa = () => {
-    setModalPausaOpen(false);
-    setProtocoloPausaSel(null);
-    setNotaPausa("");
-  };
-
-  const handlePausarSessao = async (e) => {
-    e.preventDefault();
-    if (!notaPausa.trim()) {
-      setErro("A nota é obrigatória ao pausar. Descreva o que foi feito e o que está pendente.");
-      return;
-    }
-    setSalvandoSessao(true);
-    setErro("");
-    try {
-      await pausarSessao(protocoloPausaSel.id, notaPausa);
-      fecharModalPausa();
-      await carregarSessoes();
-    } catch (e) {
-      setErro(e?.message || "Erro ao pausar sessão");
-    } finally {
-      setSalvandoSessao(false);
-    }
-  };
 
   // ===== FILA DE ATENDIMENTO =====
   const carregarFila = async () => {
@@ -885,6 +836,60 @@ export default function Protocolos({ usuario }) {
       prioridade: p.prioridade ?? 2,
     });
     setModalOpen(true);
+  };
+
+  // ===== SESSÕES DE TRABALHO =====
+  const carregarSessoes = async () => {
+    try {
+      const data = await getSessoesAtivas();
+      setSessoesAtivas(Array.isArray(data) ? data.map((s) => s.protocolo_id) : []);
+    } catch { /* silencioso */ }
+  };
+
+  useEffect(() => {
+    if (usuario?.cargo === "Registrador") carregarSessoes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleIniciarSessao = async (p) => {
+    setSalvandoSessao(true);
+    setErro("");
+    try {
+      await iniciarSessao(p.id);
+      await carregarSessoes();
+    } catch (e) {
+      setErro(e?.message || "Erro ao iniciar sessão");
+    } finally {
+      setSalvandoSessao(false);
+    }
+  };
+
+  const abrirModalPausa = (p) => {
+    setProtocoloPausaSel(p);
+    setNotaPausa("");
+    setModalPausaOpen(true);
+  };
+
+  const fecharModalPausa = () => {
+    setModalPausaOpen(false);
+    setProtocoloPausaSel(null);
+    setNotaPausa("");
+  };
+
+  const handlePausarSessao = async (e) => {
+    e.preventDefault();
+    if (!notaPausa.trim()) return;
+    setSalvandoSessao(true);
+    setErro("");
+    try {
+      await pausarSessao(protocoloPausaSel.id, notaPausa);
+      fecharModalPausa();
+      await carregarSessoes();
+    } catch (e) {
+      setErro(e?.message || "Erro ao pausar sessão");
+    } finally {
+      setSalvandoSessao(false);
+    }
   };
 
   const fecharModal = () => {
@@ -1488,7 +1493,7 @@ export default function Protocolos({ usuario }) {
                               style={{ background: "#fef3c7", color: "#d97706", fontWeight: 700 }}
                               onClick={() => abrirModalPausa(p)}
                               disabled={salvandoSessao}
-                              title="Pausar sessão (nota obrigatória)"
+                              title="Pausar sessão"
                             >
                               ⏸
                             </button>
@@ -2278,58 +2283,6 @@ export default function Protocolos({ usuario }) {
         </div>
       )}
 
-      {/* ===== Modal Pausa de Sessão ===== */}
-      {modalPausaOpen && protocoloPausaSel && (
-        <div className="modal-overlay" onClick={fecharModalPausa}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div style={{ textAlign: "center", marginBottom: "0.75rem" }}>
-              <span style={{ fontSize: "2.5rem" }}>⏸</span>
-            </div>
-            <h2 style={{ textAlign: "center", marginBottom: "0.25rem" }}>Pausar Sessão</h2>
-            <p style={{ textAlign: "center", color: "#64748b", fontSize: 14, marginBottom: "1.25rem" }}>
-              Protocolo <strong>{protocoloPausaSel.numero}</strong>
-            </p>
-
-            <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 8, padding: "0.75rem 1rem", marginBottom: "1.25rem", fontSize: 13, color: "#92400e" }}>
-              ⚠️ A nota é <strong>obrigatória</strong>. Descreva o que foi feito e o que está pendente.
-            </div>
-
-            <form onSubmit={handlePausarSessao}>
-              <div className="form-group">
-                <label htmlFor="nota-pausa">O que foi feito? O que está pendente? *</label>
-                <textarea
-                  id="nota-pausa"
-                  className="form-input"
-                  rows="4"
-                  value={notaPausa}
-                  onChange={(e) => setNotaPausa(e.target.value)}
-                  placeholder="Ex: Analisado toda a documentação, falta assinar a certidão X e aguardar resposta do setor Y..."
-                  required
-                  autoFocus
-                />
-                <small style={{ color: "#6b7280", marginTop: "0.25rem", display: "block" }}>
-                  {notaPausa.length} caractere(s)
-                </small>
-              </div>
-
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={fecharModalPausa}>
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={salvandoSessao || !notaPausa.trim()}
-                  style={{ background: "#d97706" }}
-                >
-                  {salvandoSessao ? "Pausando..." : "⏸ Confirmar Pausa"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* ===== Modal Orçamento/Prioridade (Registrador) ===== */}
       {modalOrcamentoOpen && protocoloOrcamentoSel && (
         <div className="modal-overlay" onClick={fecharModalOrcamento}>
@@ -2457,6 +2410,55 @@ export default function Protocolos({ usuario }) {
                 {transfSaving ? "Transferindo..." : "✔ Confirmar Transferência"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal Pausa de Sessão ===== */}
+      {modalPausaOpen && protocoloPausaSel && (
+        <div className="modal-overlay" onClick={fecharModalPausa}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div style={{ textAlign: "center", marginBottom: "0.75rem" }}>
+              <span style={{ fontSize: "2.5rem" }}>⏸</span>
+            </div>
+            <h2 style={{ textAlign: "center", marginBottom: "0.25rem" }}>Pausar Sessão</h2>
+            <p style={{ textAlign: "center", color: "#64748b", fontSize: 14, marginBottom: "1.25rem" }}>
+              Protocolo <strong>{protocoloPausaSel.numero}</strong>
+            </p>
+            <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 8, padding: "0.75rem 1rem", marginBottom: "1.25rem", fontSize: 13, color: "#92400e" }}>
+              ⚠️ A nota é <strong>obrigatória</strong>. Descreva o que foi feito e o que está pendente.
+            </div>
+            <form onSubmit={handlePausarSessao}>
+              <div className="form-group">
+                <label htmlFor="nota-pausa">O que foi feito? O que está pendente? *</label>
+                <textarea
+                  id="nota-pausa"
+                  className="form-input"
+                  rows="4"
+                  value={notaPausa}
+                  onChange={(e) => setNotaPausa(e.target.value)}
+                  placeholder="Ex: Analisado toda a documentação, falta assinar a certidão X e aguardar resposta do setor Y..."
+                  required
+                  autoFocus
+                />
+                <small style={{ color: "#6b7280", marginTop: "0.25rem", display: "block" }}>
+                  {notaPausa.length} caractere(s)
+                </small>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={fecharModalPausa}>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={salvandoSessao || !notaPausa.trim()}
+                  style={{ background: "#d97706" }}
+                >
+                  {salvandoSessao ? "Pausando..." : "⏸ Confirmar Pausa"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
