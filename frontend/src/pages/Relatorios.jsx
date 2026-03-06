@@ -11,9 +11,7 @@ async function apiFetch(path) {
 }
 
 const fmt = (n) => (n ?? 0).toLocaleString('pt-BR');
-const fmtPct = (n) => `${n ?? 0}%`;
 
-// ─── Mini Barra horizontal ────────────────────────────────────────────────────
 function BarraHorizontal({ valor, max, cor = '#3b82f6' }) {
   const pct = max > 0 ? (valor / max) * 100 : 0;
   return (
@@ -23,11 +21,9 @@ function BarraHorizontal({ valor, max, cor = '#3b82f6' }) {
   );
 }
 
-// ─── Gráfico de barras simples (SVG) ─────────────────────────────────────────
 function GraficoBarras({ dados, labelKey, valueKey, cor = '#3b82f6', altura = 180 }) {
   if (!dados?.length) return <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Sem dados</p>;
   const max = Math.max(...dados.map(d => d[valueKey])) || 1;
-  const w = 100 / dados.length;
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: altura, padding: '0 8px' }}>
       {dados.map((d, i) => {
@@ -35,10 +31,8 @@ function GraficoBarras({ dados, labelKey, valueKey, cor = '#3b82f6', altura = 18
         return (
           <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{d[valueKey] || ''}</span>
-            <div
-              title={`${d[labelKey]}: ${d[valueKey]}`}
-              style={{ width: '100%', height: h || 2, background: cor, borderRadius: '4px 4px 0 0', transition: 'height 0.5s ease', cursor: 'default' }}
-            />
+            <div title={`${d[labelKey]}: ${d[valueKey]}`}
+              style={{ width: '100%', height: h || 2, background: cor, borderRadius: '4px 4px 0 0', transition: 'height 0.5s ease' }} />
             <span style={{ fontSize: 9, color: '#94a3b8', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
               {typeof d[labelKey] === 'string' ? d[labelKey].split(' ')[0] : d[labelKey]}
             </span>
@@ -49,73 +43,49 @@ function GraficoBarras({ dados, labelKey, valueKey, cor = '#3b82f6', altura = 18
   );
 }
 
-// ─── Gráfico de linha (SVG) ───────────────────────────────────────────────────
 function GraficoLinha({ dados, labelKey, valueKey, cor = '#3b82f6', altura = 160 }) {
   if (!dados?.length) return <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Sem dados</p>;
   const max = Math.max(...dados.map(d => d[valueKey])) || 1;
-  const min = 0;
   const W = 600, H = altura;
   const pad = { top: 20, right: 20, bottom: 30, left: 30 };
   const w = W - pad.left - pad.right;
   const h = H - pad.top - pad.bottom;
   const points = dados.map((d, i) => {
     const x = pad.left + (i / (dados.length - 1 || 1)) * w;
-    const y = pad.top + (1 - (d[valueKey] - min) / (max - min)) * h;
+    const y = pad.top + (1 - d[valueKey] / max) * h;
     return `${x},${y}`;
   }).join(' ');
-
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: altura }}>
-      {/* Grid lines */}
       {[0, 0.25, 0.5, 0.75, 1].map((v, i) => (
-        <line key={i} x1={pad.left} x2={W - pad.right} y1={pad.top + v * h} y2={pad.top + v * h}
-          stroke="#e2e8f0" strokeWidth={1} />
+        <line key={i} x1={pad.left} x2={W - pad.right} y1={pad.top + v * h} y2={pad.top + v * h} stroke="#e2e8f0" strokeWidth={1} />
       ))}
-      {/* Área */}
-      <polygon
-        points={`${pad.left},${pad.top + h} ${points} ${W - pad.right},${pad.top + h}`}
-        fill={cor} fillOpacity={0.1}
-      />
-      {/* Linha */}
+      <polygon points={`${pad.left},${pad.top + h} ${points} ${W - pad.right},${pad.top + h}`} fill={cor} fillOpacity={0.1} />
       <polyline points={points} fill="none" stroke={cor} strokeWidth={2.5} strokeLinejoin="round" />
-      {/* Pontos */}
       {dados.map((d, i) => {
         const x = pad.left + (i / (dados.length - 1 || 1)) * w;
-        const y = pad.top + (1 - (d[valueKey] - min) / (max - min)) * h;
-        return (
-          <circle key={i} cx={x} cy={y} r={3} fill={cor} stroke="white" strokeWidth={1.5}>
-            <title>{`${d[labelKey]}: ${d[valueKey]}`}</title>
-          </circle>
-        );
+        const y = pad.top + (1 - d[valueKey] / max) * h;
+        return <circle key={i} cx={x} cy={y} r={3} fill={cor} stroke="white" strokeWidth={1.5}><title>{`${d[labelKey]}: ${d[valueKey]}`}</title></circle>;
       })}
-      {/* Labels eixo X (a cada N) */}
-      {dados.filter((_, i) => i % Math.ceil(dados.length / 6) === 0 || i === dados.length - 1).map((d, idx, arr) => {
+      {dados.filter((_, i) => i % Math.ceil(dados.length / 6) === 0 || i === dados.length - 1).map((d, idx) => {
         const origIdx = dados.indexOf(d);
         const x = pad.left + (origIdx / (dados.length - 1 || 1)) * w;
-        return (
-          <text key={idx} x={x} y={H - 4} textAnchor="middle" fontSize={9} fill="#94a3b8">
-            {String(d[labelKey]).slice(-5)}
-          </text>
-        );
+        return <text key={idx} x={x} y={H - 4} textAnchor="middle" fontSize={9} fill="#94a3b8">{String(d[labelKey]).slice(-5)}</text>;
       })}
     </svg>
   );
 }
 
-// ─── Card KPI ─────────────────────────────────────────────────────────────────
 function KpiCard({ label, valor, sub, cor = '#3b82f6', icone }) {
   return (
     <div style={{ background: 'white', borderRadius: 12, padding: '1.25rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', borderLeft: `4px solid ${cor}` }}>
-      <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-        {icone} {label}
-      </div>
+      <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{icone} {label}</div>
       <div style={{ fontSize: '2rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.1 }}>{valor}</div>
       {sub && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
 
-// ─── Seção com título ─────────────────────────────────────────────────────────
 function Secao({ titulo, children, acao }) {
   return (
     <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.08)', marginBottom: '1.5rem', overflow: 'hidden' }}>
@@ -128,20 +98,33 @@ function Secao({ titulo, children, acao }) {
   );
 }
 
-// ─── Badge ────────────────────────────────────────────────────────────────────
-function Badge({ children, cor = '#3b82f6' }) {
-  const cores = {
-    verde: { bg: '#d1fae5', text: '#065f46' },
-    amarelo: { bg: '#fef3c7', text: '#92400e' },
-    vermelho: { bg: '#fee2e2', text: '#991b1b' },
-    azul: { bg: '#dbeafe', text: '#1e40af' },
-    cinza: { bg: '#f1f5f9', text: '#475569' },
-  };
+function Badge({ children, cor = 'azul' }) {
+  const cores = { verde: { bg: '#d1fae5', text: '#065f46' }, amarelo: { bg: '#fef3c7', text: '#92400e' }, vermelho: { bg: '#fee2e2', text: '#991b1b' }, azul: { bg: '#dbeafe', text: '#1e40af' }, cinza: { bg: '#f1f5f9', text: '#475569' } };
   const c = cores[cor] || cores.azul;
+  return <span style={{ background: c.bg, color: c.text, padding: '0.2rem 0.6rem', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>{children}</span>;
+}
+
+// ─── Renderizar markdown simples ──────────────────────────────────────────────
+function RenderMarkdown({ text }) {
+  if (!text) return null;
+  const lines = text.split('\n');
   return (
-    <span style={{ background: c.bg, color: c.text, padding: '0.2rem 0.6rem', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>
-      {children}
-    </span>
+    <div>
+      {lines.map((line, i) => {
+        if (line.startsWith('## ')) return (
+          <h3 key={i} style={{ color: '#1e293b', marginTop: '1.5rem', marginBottom: '0.5rem', fontSize: '1.05rem', fontWeight: 700, borderBottom: '2px solid #e2e8f0', paddingBottom: '0.35rem' }}>
+            {line.replace('## ', '')}
+          </h3>
+        );
+        if (line.startsWith('- ')) return (
+          <li key={i} style={{ color: '#374151', marginLeft: '1.25rem', marginBottom: '0.3rem', lineHeight: 1.7 }}>
+            {line.slice(2).replace(/\*\*(.*?)\*\*/g, '$1')}
+          </li>
+        );
+        if (line.trim() === '') return <div key={i} style={{ height: '0.5rem' }} />;
+        return <p key={i} style={{ color: '#374151', margin: '0.3rem 0', lineHeight: 1.7 }}>{line.replace(/\*\*(.*?)\*\*/g, '$1')}</p>;
+      })}
+    </div>
   );
 }
 
@@ -151,29 +134,28 @@ function Relatorios({ usuario }) {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
 
-  // Dados
   const [kpis, setKpis] = useState(null);
-  const [geral, setGeral] = useState(null);
   const [ranking, setRanking] = useState([]);
   const [producaoDiaria, setProducaoDiaria] = useState([]);
   const [tendenciaMensal, setTendenciaMensal] = useState([]);
   const [produtividade, setProdutividade] = useState([]);
   const [porServico, setPorServico] = useState([]);
 
-  // Filtros
-  const [dataInicio, setDataInicio] = useState(() => {
-    const d = new Date(); d.setDate(1);
-    return d.toISOString().slice(0, 10);
-  });
+  const [dataInicio, setDataInicio] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); });
   const [dataFim, setDataFim] = useState(new Date().toISOString().slice(0, 10));
 
+  // IA
+  const [modalIAOpen, setModalIAOpen] = useState(false);
+  const [iaLoading, setIaLoading] = useState(false);
+  const [iaRelatorio, setIaRelatorio] = useState('');
+  const [iaErro, setIaErro] = useState('');
+  const [iaGeradoEm, setIaGeradoEm] = useState('');
+
   const carregar = useCallback(async () => {
-    setLoading(true);
-    setErro('');
+    setLoading(true); setErro('');
     try {
-      const [k, g, r, pd, tm, pr, ps] = await Promise.all([
+      const [k, r, pd, tm, pr, ps] = await Promise.all([
         apiFetch('/kpis'),
-        apiFetch('/geral'),
         apiFetch(`/ranking?data_inicio=${dataInicio}&data_fim=${dataFim}`),
         apiFetch('/producao-diaria'),
         apiFetch('/tendencia-mensal'),
@@ -181,14 +163,13 @@ function Relatorios({ usuario }) {
         apiFetch('/por-servico'),
       ]);
       setKpis(k);
-      setGeral(g);
       setRanking(Array.isArray(r) ? r : []);
       setProducaoDiaria(Array.isArray(pd) ? pd : []);
       setTendenciaMensal(Array.isArray(tm) ? tm : []);
       setProdutividade(Array.isArray(pr) ? pr : []);
       setPorServico(Array.isArray(ps) ? ps : []);
     } catch (e) {
-      setErro('Erro ao carregar relatórios. Verifique a conexão.');
+      setErro('Erro ao carregar relatórios.');
     } finally {
       setLoading(false);
     }
@@ -196,31 +177,66 @@ function Relatorios({ usuario }) {
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  const gerarRelatorioIA = async () => {
+    setModalIAOpen(true);
+    setIaLoading(true);
+    setIaRelatorio('');
+    setIaErro('');
+    setIaGeradoEm('');
+    try {
+      const r = await fetch(`${API_URL}/relatorios/analise-ia`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+      });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message || 'Erro'); }
+      const data = await r.json();
+      setIaRelatorio(data.relatorio);
+      setIaGeradoEm(new Date(data.gerado_em).toLocaleString('pt-BR'));
+    } catch (e) {
+      setIaErro(e.message || 'Erro ao conectar com a IA');
+    } finally {
+      setIaLoading(false);
+    }
+  };
+
   const abas = [
-    { id: 'executivo', label: '📊 Executivo', roles: ['Supervisor', 'Coordenador'] },
-    { id: 'produtividade', label: '👥 Produtividade', roles: ['Supervisor', 'Coordenador'] },
-    { id: 'tendencia', label: '📈 Tendência', roles: ['Supervisor', 'Coordenador'] },
-    { id: 'servicos', label: '⚙️ Serviços', roles: ['Supervisor', 'Coordenador'] },
-  ].filter(a => a.roles.includes(usuario?.cargo));
+    { id: 'executivo', label: '📊 Executivo' },
+    { id: 'produtividade', label: '👥 Produtividade' },
+    { id: 'tendencia', label: '📈 Tendência' },
+    { id: 'servicos', label: '⚙️ Serviços' },
+  ];
 
   const maxRanking = ranking.length > 0 ? Math.max(...ranking.map(r => r.concluidos)) : 1;
-  const maxProdutividade = produtividade.length > 0 ? Math.max(...produtividade.map(p => p.total_criados)) : 1;
-
-  const corCargo = (cargo) => {
-    if (cargo === 'Supervisor') return 'azul';
-    if (cargo === 'Coordenador') return 'verde';
-    return 'cinza';
-  };
+  const corCargo = (cargo) => cargo === 'Supervisor' ? 'azul' : cargo === 'Coordenador' ? 'verde' : 'cinza';
 
   return (
     <div style={{ padding: '2rem', background: '#f8fafc', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>📈 Relatórios</h1>
-        <p style={{ color: '#64748b', margin: '0.25rem 0 0' }}>Dashboards de produtividade e desempenho</p>
+      <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>📈 Relatórios</h1>
+          <p style={{ color: '#64748b', margin: '0.25rem 0 0' }}>Dashboards de produtividade e desempenho</p>
+        </div>
+        {/* BOTÃO IA */}
+        <button
+          onClick={gerarRelatorioIA}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            padding: '0.75rem 1.5rem',
+            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            color: 'white', border: 'none', borderRadius: 12,
+            fontWeight: 700, fontSize: 15, cursor: 'pointer',
+            boxShadow: '0 4px 15px rgba(99,102,241,0.4)',
+            transition: 'transform 0.15s, box-shadow 0.15s',
+          }}
+          onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+          onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+        >
+          🤖 Análise com IA
+        </button>
       </div>
 
-      {/* Filtro de datas */}
+      {/* Filtros */}
       <div style={{ background: 'white', borderRadius: 12, padding: '1rem 1.5rem', marginBottom: '1.5rem', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div>
           <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Data início</label>
@@ -250,19 +266,12 @@ function Relatorios({ usuario }) {
         ))}
       </div>
 
-      {loading && (
-        <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⟳</div>
-          Carregando dados...
-        </div>
-      )}
+      {loading && <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}><div style={{ fontSize: '2rem' }}>⟳</div>Carregando dados...</div>}
 
       {!loading && (
         <>
-          {/* ── ABA EXECUTIVO ── */}
           {aba === 'executivo' && (
             <>
-              {/* KPIs */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                 <KpiCard label="Criados hoje" valor={fmt(kpis?.criados_hoje)} cor="#3b82f6" icone="📥" />
                 <KpiCard label="Criados na semana" valor={fmt(kpis?.criados_semana)} cor="#8b5cf6" icone="📅" />
@@ -273,23 +282,15 @@ function Relatorios({ usuario }) {
                 <KpiCard label="Atrasados" valor={fmt(kpis?.atrasados)} cor="#ef4444" icone="🚨" sub="Precisam de atenção" />
                 <KpiCard label="Média/funcionário" valor={fmt(kpis?.media_por_funcionario)} cor="#64748b" icone="👤" sub="No mês atual" />
               </div>
-
-              {/* Produção diária */}
               <Secao titulo="📈 Produção Diária — Últimos 30 dias">
                 <GraficoLinha dados={producaoDiaria} labelKey="dia" valueKey="criados" cor="#3b82f6" altura={180} />
               </Secao>
-
-              {/* Ranking do mês */}
               <Secao titulo="🏆 Ranking do Mês">
-                {ranking.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: '#94a3b8' }}>Sem dados no período</p>
-                ) : (
+                {ranking.length === 0 ? <p style={{ textAlign: 'center', color: '#94a3b8' }}>Sem dados no período</p> : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {ranking.map((f, i) => (
                       <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <span style={{ fontSize: 18, width: 28, textAlign: 'center' }}>
-                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}
-                        </span>
+                        <span style={{ fontSize: 18, width: 28, textAlign: 'center' }}>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}</span>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                             <span style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>{f.nome}</span>
@@ -297,9 +298,7 @@ function Relatorios({ usuario }) {
                           </div>
                           <BarraHorizontal valor={f.concluidos} max={maxRanking} cor={i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#b45309' : '#3b82f6'} />
                         </div>
-                        <Badge cor={f.taxa_conclusao >= 80 ? 'verde' : f.taxa_conclusao >= 50 ? 'amarelo' : 'vermelho'}>
-                          {f.taxa_conclusao}%
-                        </Badge>
+                        <Badge cor={f.taxa_conclusao >= 80 ? 'verde' : f.taxa_conclusao >= 50 ? 'amarelo' : 'vermelho'}>{f.taxa_conclusao}%</Badge>
                       </div>
                     ))}
                   </div>
@@ -308,18 +307,11 @@ function Relatorios({ usuario }) {
             </>
           )}
 
-          {/* ── ABA PRODUTIVIDADE ── */}
           {aba === 'produtividade' && (
             <>
-              {/* Gráfico barras por funcionário */}
               <Secao titulo="📊 Protocolos Criados por Funcionário">
-                <GraficoBarras
-                  dados={produtividade.filter(p => p.total_criados > 0)}
-                  labelKey="nome" valueKey="total_criados" cor="#3b82f6" altura={200}
-                />
+                <GraficoBarras dados={produtividade.filter(p => p.total_criados > 0)} labelKey="nome" valueKey="total_criados" cor="#3b82f6" altura={200} />
               </Secao>
-
-              {/* Tabela detalhada */}
               <Secao titulo="👥 Detalhamento por Funcionário">
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -358,13 +350,11 @@ function Relatorios({ usuario }) {
             </>
           )}
 
-          {/* ── ABA TENDÊNCIA ── */}
           {aba === 'tendencia' && (
             <>
               <Secao titulo="📆 Tendência Mensal — Últimos 6 meses">
                 <GraficoLinha dados={tendenciaMensal} labelKey="mes_label" valueKey="criados" cor="#8b5cf6" altura={200} />
               </Secao>
-
               <Secao titulo="📋 Detalhes por Mês">
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -384,9 +374,7 @@ function Relatorios({ usuario }) {
                             <td style={{ padding: '0.75rem 1rem', color: '#3b82f6', fontWeight: 700 }}>{m.criados}</td>
                             <td style={{ padding: '0.75rem 1rem', color: '#10b981', fontWeight: 700 }}>{m.concluidos}</td>
                             <td style={{ padding: '0.75rem 1rem', color: '#ef4444' }}>{m.atrasados}</td>
-                            <td style={{ padding: '0.75rem 1rem' }}>
-                              <Badge cor={taxa >= 80 ? 'verde' : taxa >= 50 ? 'amarelo' : 'vermelho'}>{taxa}%</Badge>
-                            </td>
+                            <td style={{ padding: '0.75rem 1rem' }}><Badge cor={taxa >= 80 ? 'verde' : taxa >= 50 ? 'amarelo' : 'vermelho'}>{taxa}%</Badge></td>
                           </tr>
                         );
                       })}
@@ -394,23 +382,17 @@ function Relatorios({ usuario }) {
                   </table>
                 </div>
               </Secao>
-
               <Secao titulo="📅 Produção Diária — Últimos 30 dias">
                 <GraficoBarras dados={producaoDiaria} labelKey="dia" valueKey="criados" cor="#06b6d4" altura={180} />
               </Secao>
             </>
           )}
 
-          {/* ── ABA SERVIÇOS ── */}
           {aba === 'servicos' && (
             <>
               <Secao titulo="⚙️ Desempenho por Tipo de Serviço">
-                <GraficoBarras
-                  dados={porServico.filter(s => s.total_protocolos > 0)}
-                  labelKey="nome" valueKey="total_protocolos" cor="#10b981" altura={200}
-                />
+                <GraficoBarras dados={porServico.filter(s => s.total_protocolos > 0)} labelKey="nome" valueKey="total_protocolos" cor="#10b981" altura={200} />
               </Secao>
-
               <Secao titulo="📋 Tabela por Serviço">
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -425,18 +407,12 @@ function Relatorios({ usuario }) {
                       {porServico.map((s, i) => (
                         <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                           <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#1e293b' }}>{s.nome}</td>
-                          <td style={{ padding: '0.75rem 1rem' }}>
-                            <Badge cor="azul">{s.prazo} {s.tipo_prazo === 'uteis' ? 'úteis' : 'corridos'}</Badge>
-                          </td>
+                          <td style={{ padding: '0.75rem 1rem' }}><Badge cor="azul">{s.prazo} {s.tipo_prazo === 'uteis' ? 'úteis' : 'corridos'}</Badge></td>
                           <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#3b82f6' }}>{s.total_protocolos}</td>
                           <td style={{ padding: '0.75rem 1rem', color: '#f59e0b' }}>{s.em_andamento}</td>
                           <td style={{ padding: '0.75rem 1rem', color: '#10b981', fontWeight: 700 }}>{s.concluidos}</td>
                           <td style={{ padding: '0.75rem 1rem' }}>
-                            {s.concluidos > 0 ? (
-                              <Badge cor={s.no_prazo === s.concluidos ? 'verde' : s.no_prazo > 0 ? 'amarelo' : 'vermelho'}>
-                                {s.no_prazo}/{s.concluidos}
-                              </Badge>
-                            ) : '-'}
+                            {s.concluidos > 0 ? <Badge cor={s.no_prazo === s.concluidos ? 'verde' : s.no_prazo > 0 ? 'amarelo' : 'vermelho'}>{s.no_prazo}/{s.concluidos}</Badge> : '-'}
                           </td>
                           <td style={{ padding: '0.75rem 1rem', color: '#64748b' }}>{s.tempo_medio > 0 ? `${s.tempo_medio} dias` : '-'}</td>
                         </tr>
@@ -448,6 +424,73 @@ function Relatorios({ usuario }) {
             </>
           )}
         </>
+      )}
+
+      {/* ===== MODAL IA ===== */}
+      {modalIAOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+          onClick={() => !iaLoading && setModalIAOpen(false)}>
+          <div style={{ background: 'white', borderRadius: 20, width: '100%', maxWidth: 780, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
+            onClick={e => e.stopPropagation()}>
+
+            {/* Header modal */}
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', borderRadius: '20px 20px 0 0' }}>
+              <div>
+                <h2 style={{ margin: 0, color: 'white', fontSize: '1.25rem', fontWeight: 800 }}>🤖 Análise Gerencial com IA</h2>
+                <p style={{ margin: '0.25rem 0 0', color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>
+                  {iaGeradoEm ? `Gerado em ${iaGeradoEm}` : 'Processando dados do sistema...'}
+                </p>
+              </div>
+              {!iaLoading && (
+                <button onClick={() => setModalIAOpen(false)}
+                  style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', borderRadius: 8, padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: 18, fontWeight: 700 }}>
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Corpo modal */}
+            <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
+              {iaLoading && (
+                <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '1rem', animation: 'spin 1s linear infinite' }}>🤖</div>
+                  <p style={{ fontSize: '1.1rem', fontWeight: 600, color: '#6366f1', margin: 0 }}>Analisando dados do cartório...</p>
+                  <p style={{ color: '#94a3b8', fontSize: 13, marginTop: '0.5rem' }}>A IA está processando produtividade, atrasos e tendências</p>
+                  <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                </div>
+              )}
+
+              {iaErro && (
+                <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: 12, padding: '1.25rem', color: '#991b1b' }}>
+                  <strong>⚠️ Erro:</strong> {iaErro}
+                </div>
+              )}
+
+              {iaRelatorio && !iaLoading && (
+                <div style={{ lineHeight: 1.7 }}>
+                  <RenderMarkdown text={iaRelatorio} />
+                </div>
+              )}
+            </div>
+
+            {/* Footer modal */}
+            {iaRelatorio && !iaLoading && (
+              <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 12, color: '#94a3b8' }}>Análise gerada por Claude (Anthropic)</span>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button onClick={gerarRelatorioIA}
+                    style={{ padding: '0.5rem 1rem', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+                    🔄 Atualizar
+                  </button>
+                  <button onClick={() => setModalIAOpen(false)}
+                    style={{ padding: '0.5rem 1.25rem', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
