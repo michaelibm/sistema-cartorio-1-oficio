@@ -7,7 +7,7 @@ const { authMiddleware } = require('../middleware/auth');
 async function calcularDataVencimento(dataEntrada, prazo, tipoPrazo) {
   let data = new Date(dataEntrada);
   data.setHours(0, 0, 0, 0);
-  
+
   let diasAdicionados = 0;
 
   const feriadosResult = await pool.query('SELECT data FROM feriados');
@@ -15,12 +15,12 @@ async function calcularDataVencimento(dataEntrada, prazo, tipoPrazo) {
 
   while (diasAdicionados < prazo) {
     data.setDate(data.getDate() + 1);
-    
+
     if (tipoPrazo === 'uteis') {
       const diaSemana = data.getDay();
       const dataStr = data.toISOString().split('T')[0];
       const ehFeriado = feriados.includes(dataStr);
-      
+
       if (diaSemana !== 0 && diaSemana !== 6 && !ehFeriado) {
         diasAdicionados++;
       }
@@ -36,7 +36,7 @@ async function calcularDataVencimento(dataEntrada, prazo, tipoPrazo) {
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { status, responsavel_id } = req.query;
-    
+
     let query = `
       SELECT p.*, s.nome as servico_nome, s.prazo, s.tipo_prazo,
              u.nome as responsavel_nome, u.cargo as responsavel_cargo, u.setor as responsavel_setor
@@ -45,7 +45,7 @@ router.get('/', authMiddleware, async (req, res) => {
       JOIN usuarios u ON p.responsavel_id = u.id
       WHERE 1=1
     `;
-    
+
     const params = [];
     let paramCount = 1;
 
@@ -156,19 +156,19 @@ router.get('/relatorio-sessoes', authMiddleware, async (req, res) => {
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     let query = `
       SELECT p.*, s.nome as servico_nome, s.prazo, s.tipo_prazo,
-             u.nome as responsavel_nome, u.email as responsavel_email, 
+             u.nome as responsavel_nome, u.email as responsavel_email,
              u.cargo as responsavel_cargo, u.setor as responsavel_setor
       FROM protocolos p
       JOIN servicos s ON p.servico_id = s.id
       JOIN usuarios u ON p.responsavel_id = u.id
       WHERE p.id = $1
     `;
-    
+
     const params = [id];
-    
+
     if (req.user.cargo === 'Registrador') {
       query += ' AND p.responsavel_id = $2';
       params.push(req.user.id);
@@ -191,7 +191,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
     `, [id]);
 
     const historicoResult = await pool.query(`
-      SELECT h.*, u.nome as usuario_nome, u.email as usuario_email, 
+      SELECT h.*, u.nome as usuario_nome, u.email as usuario_email,
              u.cargo as usuario_cargo, u.setor as usuario_setor
       FROM historico h
       LEFT JOIN usuarios u ON h.usuario_id = u.id
@@ -266,7 +266,6 @@ router.post('/', authMiddleware, async (req, res) => {
     const servico = servicoResult.rows[0];
     const data_vencimento = await calcularDataVencimento(data_entrada, servico.prazo, servico.tipo_prazo);
 
-    // Validar valor do orçamento
     const valorOrcamento = (tem_orcamento && orcamento_valor) ? parseFloat(orcamento_valor) : null;
     const prioridadeVal = prioridade ? parseInt(prioridade) : 2;
     const statusVal = status || 'andamento';
@@ -320,7 +319,6 @@ router.put('/:id', authMiddleware, async (req, res) => {
     let paramCount = 1;
     const updates = [];
 
-    // Se servico_id ou data_entrada foram enviados, recalcula o vencimento
     if (servico_id !== undefined || data_entrada !== undefined) {
       const atual = await pool.query('SELECT servico_id, data_entrada FROM protocolos WHERE id = $1', [id]);
       if (atual.rows.length === 0) {
@@ -369,7 +367,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
       updates.push(`status = $${paramCount}`);
       params.push(status);
       paramCount++;
-      
+
       if (status === 'concluido') {
         updates.push(`data_conclusao = CURRENT_DATE`);
       }
@@ -436,14 +434,14 @@ router.post('/:id/notas', authMiddleware, async (req, res) => {
 
     let checkQuery = 'SELECT id, numero, responsavel_id FROM protocolos WHERE id = $1';
     const checkParams = [id];
-    
+
     if (req.user.cargo === 'Registrador') {
       checkQuery += ' AND responsavel_id = $2';
       checkParams.push(req.user.id);
     }
 
     const protocoloCheck = await pool.query(checkQuery, checkParams);
-    
+
     if (protocoloCheck.rows.length === 0) {
       return res.status(404).json({ message: 'Protocolo não encontrado ou sem permissão' });
     }
@@ -481,14 +479,14 @@ router.get('/:id/notas', authMiddleware, async (req, res) => {
 
     let checkQuery = 'SELECT id FROM protocolos WHERE id = $1';
     const checkParams = [id];
-    
+
     if (req.user.cargo === 'Registrador') {
       checkQuery += ' AND responsavel_id = $2';
       checkParams.push(req.user.id);
     }
 
     const protocoloCheck = await pool.query(checkQuery, checkParams);
-    
+
     if (protocoloCheck.rows.length === 0) {
       return res.status(404).json({ message: 'Protocolo não encontrado ou sem permissão' });
     }
@@ -515,20 +513,20 @@ router.get('/:id/historico', authMiddleware, async (req, res) => {
 
     let checkQuery = 'SELECT id FROM protocolos WHERE id = $1';
     const checkParams = [id];
-    
+
     if (req.user.cargo === 'Registrador') {
       checkQuery += ' AND responsavel_id = $2';
       checkParams.push(req.user.id);
     }
 
     const protocoloCheck = await pool.query(checkQuery, checkParams);
-    
+
     if (protocoloCheck.rows.length === 0) {
       return res.status(404).json({ message: 'Protocolo não encontrado ou sem permissão' });
     }
 
     const result = await pool.query(`
-      SELECT h.*, u.nome as usuario_nome, u.email as usuario_email, 
+      SELECT h.*, u.nome as usuario_nome, u.email as usuario_email,
              u.cargo as usuario_cargo, u.setor as usuario_setor
       FROM historico h
       LEFT JOIN usuarios u ON h.usuario_id = u.id
@@ -554,11 +552,11 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     }
 
     const p = pRes.rows[0];
-    
+
     if (req.user.cargo === 'Registrador' && p.responsavel_id != req.user.id) {
       return res.status(403).json({ message: 'Você só pode cancelar seus próprios protocolos' });
     }
-    
+
     if (p.status === 'cancelado') {
       return res.json({ ok: true, message: 'Protocolo já está cancelado' });
     }
@@ -594,42 +592,39 @@ router.post('/:id/adicionar-servico', authMiddleware, async (req, res) => {
       'SELECT id, numero, status, data_entrada, data_vencimento, responsavel_id FROM protocolos WHERE id = $1',
       [id]
     );
-    
+
     if (protocoloRes.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Protocolo não encontrado' });
     }
 
     const protocolo = protocoloRes.rows[0];
-    
+
     if (req.user.cargo === 'Registrador' && protocolo.responsavel_id != req.user.id) {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Você só pode adicionar serviços aos seus próprios protocolos' });
     }
-    
-    // Bloqueia apenas cancelado
-if (protocolo.status === 'cancelado') {
-  await client.query('ROLLBACK');
-  return res.status(400).json({ message: 'Não é possível adicionar serviço em protocolo cancelado.' });
-}
 
-// Se estiver concluído, reabre para andamento automaticamente
-if (protocolo.status === 'concluido') {
-  await client.query(
-    `UPDATE protocolos 
-     SET status = 'andamento', data_conclusao = NULL
-     WHERE id = $1`,
-    [id]
-  );
+    if (protocolo.status === 'cancelado') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Não é possível adicionar serviço em protocolo cancelado.' });
+    }
 
-  await client.query(
-    'INSERT INTO historico (protocolo_id, usuario_id, acao, descricao) VALUES ($1, $2, $3, $4)',
-    [id, req.user.id, 'REABERTURA', `Protocolo reaberto automaticamente ao adicionar novo serviço por ${req.user.email}`]
-  );
+    if (protocolo.status === 'concluido') {
+      await client.query(
+        `UPDATE protocolos
+         SET status = 'andamento', data_conclusao = NULL
+         WHERE id = $1`,
+        [id]
+      );
 
-  // Atualiza a variável local para seguir o fluxo com status correto
-  protocolo.status = 'andamento';
-}
+      await client.query(
+        'INSERT INTO historico (protocolo_id, usuario_id, acao, descricao) VALUES ($1, $2, $3, $4)',
+        [id, req.user.id, 'REABERTURA', `Protocolo reaberto automaticamente ao adicionar novo serviço por ${req.user.email}`]
+      );
+
+      protocolo.status = 'andamento';
+    }
 
     const servicoRes = await client.query('SELECT id, nome, prazo, tipo_prazo FROM servicos WHERE id = $1', [servico_id]);
     if (servicoRes.rows.length === 0) {
@@ -651,7 +646,7 @@ if (protocolo.status === 'concluido') {
       const recalculada = await calcularDataVencimento(protocolo.data_entrada, servico.prazo, servico.tipo_prazo);
       const dataAtual = new Date(novaData);
       const dataRecalculada = new Date(recalculada);
-      
+
       novaData = (dataRecalculada > dataAtual) ? recalculada : novaData;
       await client.query('UPDATE protocolos SET data_vencimento = $1 WHERE id = $2', [novaData, id]);
     }
@@ -691,19 +686,19 @@ router.patch('/:id/concluir', authMiddleware, async (req, res) => {
 
     if (req.user.cargo === 'Registrador') {
       const checkProtocolo = await pool.query('SELECT responsavel_id FROM protocolos WHERE id = $1', [id]);
-      
+
       if (checkProtocolo.rows.length === 0) {
         return res.status(404).json({ message: 'Protocolo não encontrado' });
       }
-      
+
       if (checkProtocolo.rows[0].responsavel_id != req.user.id) {
         return res.status(403).json({ message: 'Você só pode concluir seus próprios protocolos' });
       }
     }
 
     const result = await pool.query(
-      `UPDATE protocolos 
-       SET status = 'concluido', data_conclusao = CURRENT_DATE 
+      `UPDATE protocolos
+       SET status = 'concluido', data_conclusao = CURRENT_DATE
        WHERE id = $1 AND status = 'andamento'
        RETURNING *`,
       [id]
@@ -730,7 +725,6 @@ router.patch('/:id/concluir', authMiddleware, async (req, res) => {
 // ============================================================
 router.get('/financeiro/relatorio', authMiddleware, async (req, res) => {
   try {
-    // Somente Supervisor e Coordenador
     if (req.user.cargo === 'Registrador') {
       return res.status(403).json({ message: 'Sem permissão para acessar relatório financeiro' });
     }
@@ -765,9 +759,8 @@ router.get('/financeiro/relatorio', authMiddleware, async (req, res) => {
       paramCount++;
     }
 
-    // Buscar protocolos com orçamento
     const protocolos = await pool.query(`
-      SELECT 
+      SELECT
         p.id, p.numero, p.status, p.data_entrada, p.data_vencimento, p.data_conclusao,
         p.tem_orcamento, p.orcamento_valor, p.orcamento_pago, p.observacoes,
         s.nome as servico_nome,
@@ -779,7 +772,6 @@ router.get('/financeiro/relatorio', authMiddleware, async (req, res) => {
       ORDER BY p.data_entrada DESC
     `, params);
 
-    // Totalizadores
     const totais = await pool.query(`
       SELECT
         COUNT(*) as total_protocolos,
@@ -792,7 +784,6 @@ router.get('/financeiro/relatorio', authMiddleware, async (req, res) => {
       ${whereClause}
     `, params);
 
-    // Totais por responsável
     const porResponsavel = await pool.query(`
       SELECT
         u.nome as responsavel_nome,
@@ -824,19 +815,16 @@ router.get('/dashboard/stats', authMiddleware, async (req, res) => {
   try {
     let whereClause = '';
     const params = [];
-    
+
     if (req.user.cargo === 'Registrador') {
       whereClause = 'WHERE responsavel_id = $1';
       params.push(req.user.id);
     }
-    
+
+    // Ativos, atrasados, vencendo e valor a receber (estado atual do protocolo)
     const stats = await pool.query(`
-      SELECT 
+      SELECT
         COUNT(*) FILTER (WHERE status = 'andamento') as ativos,
-        COUNT(*) FILTER (WHERE status = 'concluido' AND 
-          EXTRACT(MONTH FROM data_conclusao) = EXTRACT(MONTH FROM CURRENT_DATE) AND
-          EXTRACT(YEAR FROM data_conclusao) = EXTRACT(YEAR FROM CURRENT_DATE)
-        ) as concluidos_mes,
         COUNT(*) FILTER (WHERE status = 'andamento' AND data_vencimento < CURRENT_DATE) as atrasados,
         COUNT(*) FILTER (WHERE status = 'andamento' AND data_vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE + 3) as vencendo,
         COALESCE(SUM(orcamento_valor) FILTER (WHERE tem_orcamento = true AND orcamento_pago = false), 0) as valor_a_receber
@@ -844,7 +832,41 @@ router.get('/dashboard/stats', authMiddleware, async (req, res) => {
       ${whereClause}
     `, params);
 
-    res.json(stats.rows[0]);
+    // Concluídos no período: usa historico para preservar produtividade mesmo se protocolo for reaberto
+    const { mes, ano, data_inicio, data_fim } = req.query;
+    const histParams = [];
+    const histConditions = [`h.acao = 'CONCLUSAO'`];
+
+    if (req.user.cargo === 'Registrador') {
+      histParams.push(req.user.id);
+      histConditions.push(`h.usuario_id = $${histParams.length}`);
+    }
+
+    if (data_inicio && data_fim) {
+      histParams.push(data_inicio);
+      histConditions.push(`(h.created_at AT TIME ZONE 'America/Manaus')::date >= $${histParams.length}`);
+      histParams.push(data_fim);
+      histConditions.push(`(h.created_at AT TIME ZONE 'America/Manaus')::date <= $${histParams.length}`);
+    } else if (mes && ano) {
+      histParams.push(parseInt(mes));
+      histConditions.push(`EXTRACT(MONTH FROM h.created_at AT TIME ZONE 'America/Manaus') = $${histParams.length}`);
+      histParams.push(parseInt(ano));
+      histConditions.push(`EXTRACT(YEAR FROM h.created_at AT TIME ZONE 'America/Manaus') = $${histParams.length}`);
+    } else {
+      histConditions.push(`EXTRACT(MONTH FROM h.created_at AT TIME ZONE 'America/Manaus') = EXTRACT(MONTH FROM CURRENT_TIMESTAMP AT TIME ZONE 'America/Manaus')`);
+      histConditions.push(`EXTRACT(YEAR FROM h.created_at AT TIME ZONE 'America/Manaus') = EXTRACT(YEAR FROM CURRENT_TIMESTAMP AT TIME ZONE 'America/Manaus')`);
+    }
+
+    const concluidos = await pool.query(`
+      SELECT COUNT(*)::int as concluidos_mes
+      FROM historico h
+      WHERE ${histConditions.join(' AND ')}
+    `, histParams);
+
+    res.json({
+      ...stats.rows[0],
+      concluidos_mes: concluidos.rows[0].concluidos_mes,
+    });
   } catch (error) {
     console.error('Erro ao buscar estatísticas:', error);
     res.status(500).json({ message: 'Erro ao buscar estatísticas' });
@@ -861,7 +883,6 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Novo responsável é obrigatório' });
     }
 
-    // Verificar se protocolo existe e está em andamento
     const protocolo = await pool.query(
       'SELECT id, numero, responsavel_id, status FROM protocolos WHERE id = $1',
       [id]
@@ -873,7 +894,6 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Só é possível transferir protocolos em andamento ou aguardando' });
     }
 
-    // Buscar nome do responsável atual e novo
     const responsavelAtual = await pool.query('SELECT nome FROM usuarios WHERE id = $1', [protocolo.rows[0].responsavel_id]);
     const novoResponsavel = await pool.query('SELECT nome, setor FROM usuarios WHERE id = $1 AND ativo = true', [novo_responsavel_id]);
 
@@ -881,13 +901,11 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Novo responsável não encontrado' });
     }
 
-    // Atualizar responsável e mudar status para andamento (caso esteja aguardando)
     await pool.query(
       'UPDATE protocolos SET responsavel_id = $1, status = CASE WHEN status = \'aguardando\' THEN \'andamento\' ELSE status END, updated_at = NOW() WHERE id = $2',
       [novo_responsavel_id, id]
     );
 
-    // Registrar no histórico
     const nomeAtual = responsavelAtual.rows[0]?.nome || 'Desconhecido';
     const nomeNovo = novoResponsavel.rows[0]?.nome || 'Desconhecido';
     await pool.query(
@@ -903,7 +921,7 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
   }
 });
 
-// Reabrir protocolo concluído (transferindo para novo responsável)
+// Reabrir protocolo concluído
 router.post('/:id/reabrir', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -931,32 +949,28 @@ router.post('/:id/reabrir', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Responsável não encontrado' });
     }
 
-    // Buscar prazo do novo serviço
     const servico = await pool.query('SELECT id, nome, prazo, tipo_prazo FROM servicos WHERE id = $1', [novo_servico_id]);
     if (!servico.rows.length) {
       return res.status(404).json({ message: 'Serviço não encontrado' });
     }
     const s = servico.rows[0];
 
-    // Recalcular vencimento a partir de hoje com novo serviço
     const hoje = new Date().toISOString().split('T')[0];
     const novaDataVencimento = await calcularDataVencimento(hoje, s.prazo, s.tipo_prazo);
 
-    // Reabrir: novo serviço, nova data entrada/vencimento, status andamento, limpa conclusao
     await pool.query(
-      `UPDATE protocolos 
-       SET status = 'andamento', 
-           responsavel_id = $1, 
+      `UPDATE protocolos
+       SET status = 'andamento',
+           responsavel_id = $1,
            servico_id = $2,
            data_entrada = $3,
            data_vencimento = $4,
-           data_conclusao = NULL, 
+           data_conclusao = NULL,
            updated_at = NOW()
        WHERE id = $5`,
       [novo_responsavel_id, novo_servico_id, hoje, novaDataVencimento, id]
     );
 
-    // Registrar no histórico
     const nomeAnterior = responsavelAnterior.rows[0]?.nome || 'Desconhecido';
     const nomeNovo = novoResp.rows[0]?.nome || 'Desconhecido';
     await pool.query(
@@ -972,7 +986,7 @@ router.post('/:id/reabrir', authMiddleware, async (req, res) => {
   }
 });
 
-// Verificar se protocolo ja existe por numero (para validacao em tempo real)
+// Verificar se protocolo já existe por número
 router.get('/verificar/:numero', authMiddleware, async (req, res) => {
   try {
     const { numero } = req.params;
@@ -1020,7 +1034,6 @@ router.post('/:id/iniciar', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verifica se o protocolo existe e está em andamento
     const protocolo = await pool.query(
       'SELECT id, status, responsavel_id FROM protocolos WHERE id = $1',
       [id]
@@ -1032,7 +1045,6 @@ router.post('/:id/iniciar', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Só é possível iniciar sessão em protocolos em andamento' });
     }
 
-    // Verifica se já tem sessão ativa neste protocolo para este usuário
     const sessaoExistente = await pool.query(
       'SELECT id FROM protocolo_sessoes WHERE protocolo_id = $1 AND usuario_id = $2 AND pausado_em IS NULL',
       [id, req.user.id]
@@ -1068,7 +1080,6 @@ router.post('/:id/pausar', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'A nota é obrigatória ao pausar. Descreva o que foi feito e o que está pendente.' });
     }
 
-    // Busca sessão ativa deste usuário neste protocolo
     const sessao = await pool.query(
       'SELECT id FROM protocolo_sessoes WHERE protocolo_id = $1 AND usuario_id = $2 AND pausado_em IS NULL',
       [id, req.user.id]
@@ -1077,13 +1088,11 @@ router.post('/:id/pausar', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Nenhuma sessão ativa encontrada para este protocolo' });
     }
 
-    // Fecha a sessão com nota
     await pool.query(
       'UPDATE protocolo_sessoes SET pausado_em = NOW(), nota_pausa = $1 WHERE id = $2',
       [nota.trim(), sessao.rows[0].id]
     );
 
-    // Salva a nota no sistema de notas do protocolo
     await pool.query(
       'INSERT INTO protocolo_notas (protocolo_id, usuario_id, nota) VALUES ($1, $2, $3)',
       [id, req.user.id, `[Pausa] ${nota.trim()}`]

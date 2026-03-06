@@ -56,20 +56,33 @@ router.get('/por-funcionario', authMiddleware, async (req, res) => {
     const { dateFilter, params } = buildDateFilter(data_inicio, data_fim);
 
     const result = await pool.query(`
-      SELECT 
+      SELECT
         u.id,
         u.nome,
         u.cargo,
         COUNT(p.id)::int as total_protocolos,
         COUNT(p.id) FILTER (WHERE p.status = 'andamento')::int as em_andamento,
-        COUNT(p.id) FILTER (WHERE p.status = 'concluido')::int as concluidos,
+        -- Concluídos: conta pelo historico para preservar produtividade mesmo se protocolo for reaberto
+        COALESCE((
+          SELECT COUNT(*)::int FROM historico h
+          WHERE h.usuario_id = u.id AND h.acao = 'CONCLUSAO'
+          ${dateFilter ? dateFilter.replace('AND p.data_entrada', 'AND h.created_at') : ''}
+        ), 0) as concluidos,
         COUNT(p.id) FILTER (WHERE p.status = 'concluido' AND p.data_conclusao <= p.data_vencimento)::int as no_prazo,
         COUNT(p.id) FILTER (WHERE p.status = 'concluido' AND p.data_conclusao > p.data_vencimento)::int as atrasados,
-        CASE 
-          WHEN COUNT(p.id) FILTER (WHERE p.status = 'concluido') > 0 THEN
+        CASE
+          WHEN COALESCE((
+            SELECT COUNT(*)::int FROM historico h2
+            WHERE h2.usuario_id = u.id AND h2.acao = 'CONCLUSAO'
+            ${dateFilter ? dateFilter.replace('AND p.data_entrada', 'AND h2.created_at') : ''}
+          ), 0) > 0 THEN
             ROUND(
-              (COUNT(p.id) FILTER (WHERE p.status = 'concluido' AND p.data_conclusao <= p.data_vencimento)::numeric / 
-               COUNT(p.id) FILTER (WHERE p.status = 'concluido')::numeric) * 100
+              (COUNT(p.id) FILTER (WHERE p.status = 'concluido' AND p.data_conclusao <= p.data_vencimento)::numeric /
+               GREATEST(COALESCE((
+                 SELECT COUNT(*)::int FROM historico h3
+                 WHERE h3.usuario_id = u.id AND h3.acao = 'CONCLUSAO'
+                 ${dateFilter ? dateFilter.replace('AND p.data_entrada', 'AND h3.created_at') : ''}
+               ), 0), 1)::numeric) * 100
             )::int
           ELSE 0
         END as taxa_sucesso
@@ -221,13 +234,16 @@ router.get('/produtividade', authMiddleware, async (req, res) => {
     const dataFm = data_fim || new Date().toISOString().slice(0, 10);
 
     const result = await pool.query(`
-      SELECT 
+      SELECT
         u.id,
         u.nome,
         u.cargo,
         u.setor,
         COUNT(p.id)::int as total_criados,
-        COUNT(p.id) FILTER (WHERE p.status = 'concluido')::int as total_concluidos,
+        -- Conclusões pelo historico: preserva produtividade mesmo se protocolo for reaberto
+        (SELECT COUNT(*)::int FROM historico h
+         WHERE h.usuario_id = u.id AND h.acao = 'CONCLUSAO'
+         AND (h.created_at AT TIME ZONE 'America/Manaus')::date BETWEEN $1 AND $2) as total_concluidos,
         COUNT(p.id) FILTER (WHERE p.status = 'andamento')::int as em_andamento,
         COUNT(p.id) FILTER (WHERE p.status = 'concluido' AND p.data_conclusao <= p.data_vencimento)::int as no_prazo,
         COUNT(p.id) FILTER (WHERE p.status = 'concluido' AND p.data_conclusao > p.data_vencimento)::int as atrasados,
@@ -237,7 +253,7 @@ router.get('/produtividade', authMiddleware, async (req, res) => {
         MIN(p.data_entrada)::text as primeiro_protocolo,
         MAX(p.data_entrada)::text as ultimo_protocolo
       FROM usuarios u
-      LEFT JOIN protocolos p ON u.id = p.responsavel_id 
+      LEFT JOIN protocolos p ON u.id = p.responsavel_id
         AND p.data_entrada BETWEEN $1 AND $2
       WHERE u.ativo = true
       GROUP BY u.id, u.nome, u.cargo, u.setor
@@ -264,8 +280,13 @@ router.get('/kpis', authMiddleware, async (req, res) => {
         COUNT(*) FILTER (WHERE data_entrada = $1)::int as criados_hoje,
         COUNT(*) FILTER (WHERE data_entrada >= $2)::int as criados_semana,
         COUNT(*) FILTER (WHERE data_entrada >= $3)::int as criados_mes,
-        COUNT(*) FILTER (WHERE status = 'concluido' AND data_entrada = $1)::int as concluidos_hoje,
-        COUNT(*) FILTER (WHERE status = 'concluido' AND data_entrada >= $3)::int as concluidos_mes,
+        -- Conclusões pelo historico: preserva produtividade mesmo se protocolo for reaberto
+        (SELECT COUNT(*)::int FROM historico h
+         WHERE h.acao = 'CONCLUSAO'
+         AND (h.created_at AT TIME ZONE 'America/Manaus')::date = $1) as concluidos_hoje,
+        (SELECT COUNT(*)::int FROM historico h
+         WHERE h.acao = 'CONCLUSAO'
+         AND (h.created_at AT TIME ZONE 'America/Manaus')::date >= $3) as concluidos_mes,
         COUNT(*) FILTER (WHERE status = 'andamento')::int as em_andamento,
         COUNT(*) FILTER (WHERE status = 'andamento' AND data_vencimento < $1)::int as atrasados,
         COUNT(DISTINCT responsavel_id)::int as funcionarios_ativos
@@ -292,15 +313,25 @@ router.get('/kpis', authMiddleware, async (req, res) => {
 router.get('/tendencia-mensal', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
-        TO_CHAR(data_entrada, 'YYYY-MM') as mes,
-        TO_CHAR(data_entrada, 'Mon/YY') as mes_label,
+      WITH conclusoes_mes AS (
+        SELECT
+          TO_CHAR((created_at AT TIME ZONE 'America/Manaus'), 'YYYY-MM') as mes,
+          COUNT(*)::int as total
+        FROM historico
+        WHERE acao = 'CONCLUSAO'
+          AND created_at >= CURRENT_DATE - INTERVAL '6 months'
+        GROUP BY 1
+      )
+      SELECT
+        TO_CHAR(p.data_entrada, 'YYYY-MM') as mes,
+        TO_CHAR(p.data_entrada, 'Mon/YY') as mes_label,
         COUNT(*)::int as criados,
-        COUNT(*) FILTER (WHERE status = 'concluido')::int as concluidos,
-        COUNT(*) FILTER (WHERE status = 'andamento' AND data_vencimento < CURRENT_DATE)::int as atrasados
-      FROM protocolos
-      WHERE data_entrada >= CURRENT_DATE - INTERVAL '6 months'
-      GROUP BY TO_CHAR(data_entrada, 'YYYY-MM'), TO_CHAR(data_entrada, 'Mon/YY')
+        COALESCE(c.total, 0)::int as concluidos,
+        COUNT(*) FILTER (WHERE p.status = 'andamento' AND p.data_vencimento < CURRENT_DATE)::int as atrasados
+      FROM protocolos p
+      LEFT JOIN conclusoes_mes c ON c.mes = TO_CHAR(p.data_entrada, 'YYYY-MM')
+      WHERE p.data_entrada >= CURRENT_DATE - INTERVAL '6 months'
+      GROUP BY TO_CHAR(p.data_entrada, 'YYYY-MM'), TO_CHAR(p.data_entrada, 'Mon/YY'), c.total
       ORDER BY mes ASC
     `);
     res.json(result.rows);
@@ -316,16 +347,23 @@ router.get('/ranking', authMiddleware, async (req, res) => {
     const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
     
     const result = await pool.query(`
-      SELECT 
+      SELECT
         u.id,
         u.nome,
         u.cargo,
         u.setor,
         COUNT(p.id)::int as total,
-        COUNT(p.id) FILTER (WHERE p.status = 'concluido')::int as concluidos,
-        CASE 
+        -- Conclusões pelo historico: preserva produtividade mesmo se protocolo for reaberto
+        (SELECT COUNT(*)::int FROM historico h
+         WHERE h.usuario_id = u.id AND h.acao = 'CONCLUSAO'
+         AND (h.created_at AT TIME ZONE 'America/Manaus')::date >= $1) as concluidos,
+        CASE
           WHEN COUNT(p.id) > 0 THEN
-            ROUND((COUNT(p.id) FILTER (WHERE p.status = 'concluido')::numeric / COUNT(p.id)) * 100)::int
+            ROUND((
+              (SELECT COUNT(*)::int FROM historico h2
+               WHERE h2.usuario_id = u.id AND h2.acao = 'CONCLUSAO'
+               AND (h2.created_at AT TIME ZONE 'America/Manaus')::date >= $1)::numeric
+              / COUNT(p.id)) * 100)::int
           ELSE 0
         END as taxa_conclusao
       FROM usuarios u
@@ -355,7 +393,8 @@ router.post('/analise-ia', authMiddleware, async (req, res) => {
         SELECT
           COUNT(*) FILTER (WHERE data_entrada = $1)::int as criados_hoje,
           COUNT(*) FILTER (WHERE data_entrada >= $2)::int as criados_mes,
-          COUNT(*) FILTER (WHERE LOWER(status) = 'concluido' AND data_entrada >= $2)::int as concluidos_mes,
+          (SELECT COUNT(*)::int FROM historico h WHERE h.acao = 'CONCLUSAO'
+           AND (h.created_at AT TIME ZONE 'America/Manaus')::date >= $2) as concluidos_mes,
           COUNT(*) FILTER (WHERE status = 'andamento')::int as em_andamento,
           COUNT(*) FILTER (WHERE status = 'andamento' AND data_vencimento < $1)::int as atrasados
         FROM protocolos
@@ -364,10 +403,16 @@ router.post('/analise-ia', authMiddleware, async (req, res) => {
       pool.query(`
         SELECT u.nome, u.cargo, u.setor,
           COUNT(p.id)::int as total,
-          COUNT(p.id) FILTER (WHERE LOWER(p.status) = 'concluido')::int as concluidos,
+          (SELECT COUNT(*)::int FROM historico h
+           WHERE h.usuario_id = u.id AND h.acao = 'CONCLUSAO'
+           AND (h.created_at AT TIME ZONE 'America/Manaus')::date BETWEEN $1 AND $2) as concluidos,
           COUNT(p.id) FILTER (WHERE p.status = 'andamento' AND p.data_vencimento < $3)::int as atrasados_ativos,
           CASE WHEN COUNT(p.id) > 0 THEN
-            ROUND((COUNT(p.id) FILTER (WHERE LOWER(p.status) = 'concluido')::numeric / COUNT(p.id)) * 100)::int
+            ROUND((
+              (SELECT COUNT(*)::int FROM historico h2
+               WHERE h2.usuario_id = u.id AND h2.acao = 'CONCLUSAO'
+               AND (h2.created_at AT TIME ZONE 'America/Manaus')::date BETWEEN $1 AND $2)::numeric
+              / COUNT(p.id)) * 100)::int
           ELSE 0 END as taxa_conclusao
         FROM usuarios u
         LEFT JOIN protocolos p ON u.id = p.responsavel_id AND p.data_entrada BETWEEN $1 AND $2
@@ -391,13 +436,21 @@ router.post('/analise-ia', authMiddleware, async (req, res) => {
       `, [hoje]),
 
       pool.query(`
-        SELECT TO_CHAR(data_entrada, 'Mon/YY') as mes,
+        WITH conclusoes_mes AS (
+          SELECT TO_CHAR((created_at AT TIME ZONE 'America/Manaus'), 'YYYY-MM') as mes_key,
+            COUNT(*)::int as total_concluidos
+          FROM historico WHERE acao = 'CONCLUSAO'
+          AND created_at >= CURRENT_DATE - INTERVAL '4 months'
+          GROUP BY 1
+        )
+        SELECT TO_CHAR(p.data_entrada, 'Mon/YY') as mes,
           COUNT(*)::int as criados,
-          COUNT(*) FILTER (WHERE LOWER(status) = 'concluido')::int as concluidos
-        FROM protocolos
-        WHERE data_entrada >= CURRENT_DATE - INTERVAL '4 months'
-        GROUP BY TO_CHAR(data_entrada, 'YYYY-MM'), TO_CHAR(data_entrada, 'Mon/YY')
-        ORDER BY TO_CHAR(data_entrada, 'YYYY-MM') ASC
+          COALESCE(c.total_concluidos, 0)::int as concluidos
+        FROM protocolos p
+        LEFT JOIN conclusoes_mes c ON c.mes_key = TO_CHAR(p.data_entrada, 'YYYY-MM')
+        WHERE p.data_entrada >= CURRENT_DATE - INTERVAL '4 months'
+        GROUP BY TO_CHAR(p.data_entrada, 'YYYY-MM'), TO_CHAR(p.data_entrada, 'Mon/YY'), c.total_concluidos
+        ORDER BY TO_CHAR(p.data_entrada, 'YYYY-MM') ASC
       `),
 
       pool.query(`

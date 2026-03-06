@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getProtocolos } from '../services/api';
+import { getProtocolos, API_URL } from '../services/api';
 
 // Fuso horário de Manaus (UTC-4, sem horário de verão)
 const MANAUS_OFFSET = -4 * 60; // minutos
@@ -188,11 +188,19 @@ function Dashboard() {
 
       const ativos = protocolosDoperiodo.filter(p => p.status === 'andamento').length;
 
-      const concluidosMes = protocolos.filter(p => {
-        if (p.status !== 'concluido') return false;
-        const dataConclusao = new Date(p.updated_at);
-        return dataConclusao >= inicioMes && dataConclusao <= fimMes;
-      }).length;
+      // Busca concluídos do historico para preservar produtividade mesmo se protocolo for reaberto
+      const token = localStorage.getItem('token');
+      let statsParams = '';
+      if (usarFiltroData && filtroDataInicio && filtroDataFim) {
+        statsParams = `data_inicio=${filtroDataInicio}&data_fim=${filtroDataFim}`;
+      } else {
+        statsParams = `mes=${mesSelecionado + 1}&ano=${anoSelecionado}`;
+      }
+      const statsResp = await fetch(`${API_URL}/protocolos/dashboard/stats?${statsParams}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const statsData = statsResp.ok ? await statsResp.json() : {};
+      const concluidosMes = statsData.concluidos_mes ?? 0;
 
       const protocolosAtrasados = protocolosDoperiodo.filter(p => {
         if (p.status !== 'andamento') return false;
