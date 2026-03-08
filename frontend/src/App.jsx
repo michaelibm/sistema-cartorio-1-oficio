@@ -11,6 +11,7 @@ import Configuracoes from './pages/Configuracoes';
 import Painel from './pages/Painel';
 import FilaAtendimento from './pages/FilaAtendimento';
 import FilaRegistrador from './pages/FilaRegistrador';
+import Historico from './pages/Historico';
 
 import Sidebar from './components/Sidebar';
 import './styles/App.css';
@@ -102,6 +103,7 @@ function App() {
             <Route path="/fila" element={<FilaRegistrador usuario={usuario} />} />
             <Route path="/servicos" element={<Servicos usuario={usuario} />} />
             <Route path="/funcionarios" element={<Funcionarios usuario={usuario} />} />
+            <Route path="/historico" element={<Historico usuario={usuario} />} />
             <Route path="/relatorios" element={<Relatorios usuario={usuario} />} />
             <Route path="/configuracoes" element={<Configuracoes usuario={usuario} />} />
             <Route path="/painel" element={<Painel />} />

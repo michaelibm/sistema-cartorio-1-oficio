@@ -152,6 +152,69 @@ router.get('/relatorio-sessoes', authMiddleware, async (req, res) => {
   }
 });
 
+// Histórico de produção: conclusões com filtros por data, registrador e número
+router.get('/historico-producao', authMiddleware, async (req, res) => {
+  try {
+    const { data, data_inicio, data_fim, registrador_id, numero } = req.query;
+
+    const conditions = [`h.acao = 'CONCLUSAO'`];
+    const params = [];
+
+    if (req.user.cargo === 'Registrador') {
+      params.push(req.user.id);
+      conditions.push(`h.usuario_id = $${params.length}`);
+    } else if (registrador_id) {
+      params.push(Number(registrador_id));
+      conditions.push(`h.usuario_id = $${params.length}`);
+    }
+
+    if (numero && numero.trim()) {
+      params.push(`%${numero.trim()}%`);
+      conditions.push(`p.numero ILIKE $${params.length}`);
+    } else if (data_inicio && data_fim) {
+      params.push(data_inicio);
+      conditions.push(`(h.created_at AT TIME ZONE 'America/Manaus')::date >= $${params.length}`);
+      params.push(data_fim);
+      conditions.push(`(h.created_at AT TIME ZONE 'America/Manaus')::date <= $${params.length}`);
+    } else {
+      const dataFiltro = data || new Date().toISOString().slice(0, 10);
+      params.push(dataFiltro);
+      conditions.push(`(h.created_at AT TIME ZONE 'America/Manaus')::date = $${params.length}`);
+    }
+
+    const result = await pool.query(`
+      SELECT
+        h.id as historico_id,
+        (h.created_at AT TIME ZONE 'America/Manaus') as concluido_em,
+        p.id as protocolo_id,
+        p.numero,
+        p.data_entrada,
+        p.data_vencimento,
+        p.status,
+        s.nome as servico_nome,
+        u.id as registrador_id,
+        u.nome as registrador_nome,
+        u.setor as registrador_setor,
+        resp.nome as responsavel_atual_nome,
+        resp.cargo as responsavel_atual_cargo,
+        (h.created_at::date - p.data_entrada::date) as dias_para_concluir
+      FROM historico h
+      JOIN protocolos p ON h.protocolo_id = p.id
+      JOIN servicos s ON p.servico_id = s.id
+      JOIN usuarios u ON h.usuario_id = u.id
+      LEFT JOIN usuarios resp ON p.responsavel_id = resp.id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY h.created_at DESC
+      LIMIT 500
+    `, params);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erro ao buscar histórico de produção:', error);
+    res.status(500).json({ message: 'Erro ao buscar histórico' });
+  }
+});
+
 // Buscar protocolo por ID
 router.get('/:id', authMiddleware, async (req, res) => {
   try {

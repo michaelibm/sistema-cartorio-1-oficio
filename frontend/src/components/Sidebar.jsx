@@ -20,6 +20,7 @@ function Sidebar({ usuario, onLogout, onToggle }) {
     { path: '/fila', icon: '📥', label: 'Fila de Atendimento', color: '#f59e0b', roles: ['Supervisor', 'Coordenador', 'Registrador'] },
     { path: '/', icon: '🎫', label: 'Balcão de Atendimento', color: '#f59e0b', roles: ['Atendente'] },
     { path: '/servicos', icon: '⚙️', label: 'Tipos de Serviço', color: '#10b981', roles: ['Supervisor', 'Coordenador'] },
+    { path: '/historico', icon: '📜', label: 'Histórico', color: '#10b981', roles: ['Supervisor', 'Coordenador', 'Registrador'] },
     { path: '/relatorios', icon: '📈', label: 'Relatórios', color: '#06b6d4', roles: ['Supervisor', 'Coordenador'] },
     { path: '/funcionarios', icon: '👥', label: 'Funcionários', color: '#f59e0b', roles: ['Supervisor'] },
     { path: '/configuracoes', icon: '🔧', label: 'Configurações', color: '#ec4899', roles: ['Supervisor'] },
