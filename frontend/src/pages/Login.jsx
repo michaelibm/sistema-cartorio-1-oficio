@@ -3,8 +3,8 @@ import { login } from '../services/api';
 import '../styles/Login.css';
 import logo from '../styles/img/logo.png';
 
-// Homenagem ativa apenas em março (mês 2 em JS, base 0)
-const IS_WOMENS_MONTH = new Date().getMonth() === 2;
+// Homenagem ao Mês das Mulheres — ativa permanentemente
+const IS_WOMENS_MONTH = true;
 
 // Pétalas flutuantes
 const PETALS = Array.from({ length: 18 }, (_, i) => ({
