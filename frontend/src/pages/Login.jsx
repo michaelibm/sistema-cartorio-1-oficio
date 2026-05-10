@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { login } from '../services/api';
 import '../styles/Login.css';
 import logo from '../styles/img/logo.png';
@@ -395,7 +395,7 @@ function Login({ onLogin }) {
               <p className="dm-banner-title">Feliz Dia das Mães!</p>
               <p className="dm-banner-quote">
                 "O amor de mãe é o único amor que antecede o nascimento<br/>
-                e não termina com a morte."
+                e nunca deixa de existir."
               </p>
               <span className="dm-banner-flowers">🌹 🌸 🪷 🌸 🌹</span>
             </div>
