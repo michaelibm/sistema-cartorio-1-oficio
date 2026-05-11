@@ -230,14 +230,9 @@ export default function Usucapiao({ usuario }) {
     const cli     = fmt(detalhe.data_envio_cliente) || '—';
 
     const corpoCliente =
-`Prezado(a) ${nome}, bom dia.
+`Cumpre-nos informar que referente à solicitação de reconhecimento de usucapião extrajudicial, ingresso nesta Serventia em ${entrada}, sob protocolo nº ${mat}, recepção ${rec}, cujo requerente é o Sr. ${nome}, foi emitida Nota Técnica Devolutiva, datada de ${atend}, devidamente encaminhada para o interessado aos ${cli}. Temos a informar que até a presente data não houve impulsionamento do procedimento, para atendimento às exigências apontadas em nota devolutiva, decorrendo um lapso temporal de 20 (vinte) dias úteis, com omissão da interessada em atender às exigências legais, previsto na legislação acerca da usucapião.
 
-Informamos que a solicitação de ${tit.toLowerCase()} extrajudicial, ingressada nesta Serventia em ${entrada}, sob protocolo nº ${mat}, recepção ${rec}, apresenta pendências a serem regularizadas.
-
-Solicitamos a gentileza de comparecer à Serventia ou entrar em contato para atendimento das exigências, no prazo de 20 (vinte) dias úteis, sob pena de encerramento do procedimento por desídia.
-
-Atenciosamente,
-Cartório 1º Ofício de Imóveis de Manaus`;
+Portanto, com fulcro no art. 406, §2.º, do Provimento nº 149/2023-CNJ c/c art. 205 da Lei nº 6.015/73 e art. 1.032 §2º do Provimento 531/2026-CGJ/AM, esta Serventia, por meio deste, notifica o requerente, Sr. ${nome}, fixando o prazo preclusivo de 15 (quinze) dias úteis, com advertência de encerramento por desídia e cancelamento da prenotação, estando o novo pedido sujeito a recolhimento de emolumentos e processamento de prenotação, em novo protocolo.`;
 
     const corpoManifestacao =
 `Cumpre-nos informar que referente à solicitação de reconhecimento de usucapião extrajudicial, ingresso nesta Serventia em ${entrada}, sob protocolo nº ${mat}, recepção ${rec}, cujo requerente é o Sr. ${nome}, foi emitida Nota Técnica Devolutiva, datada de ${atend}, devidamente encaminhada para o interessado aos ${cli}. Temos a informar que até a presente data não houve impulsionamento do procedimento, para atendimento às exigências apontadas em nota devolutiva, decorrendo um lapso temporal de 20 (vinte) dias úteis, com omissão da interessada em atender às exigências legais, previsto na legislação acerca da usucapião.
