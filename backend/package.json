@@ -24,6 +24,7 @@
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
+    "nodemailer": "^6.9.9",
     "pg": "^8.11.3"
   },
   "devDependencies": {

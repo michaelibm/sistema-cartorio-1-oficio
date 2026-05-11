@@ -385,6 +385,15 @@ export const registrarEmailUsucapiao = async (id, tipo) => {
   return handleResponse(response);
 };
 
+export const enviarEmailSmtp = async (id, dados) => {
+  const response = await fetch(`${API_URL}/usucapiao/${id}/enviar-email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify(dados),
+  });
+  return handleResponse(response);
+};
+
 export const getUsucapiao = async (filtros = {}) => {
   const params = new URLSearchParams();
   Object.entries(filtros).forEach(([key, value]) => {

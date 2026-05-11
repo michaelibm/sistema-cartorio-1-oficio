@@ -2,6 +2,17 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+  host:   process.env.SMTP_HOST || 'smtps.uhserver.com',
+  port:   parseInt(process.env.SMTP_PORT) || 465,
+  secure: true,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
 (async () => {
   try {
@@ -206,6 +217,33 @@ router.post('/:id/notas', authMiddleware, async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ── ENVIAR EMAIL REAL VIA SMTP ─────────────────────────────────────────────
+
+router.post('/:id/enviar-email', authMiddleware, async (req, res) => {
+  try {
+    const { assunto, corpo, destinatario } = req.body;
+    if (!destinatario || !assunto || !corpo)
+      return res.status(400).json({ message: 'Destinatário, assunto e corpo são obrigatórios.' });
+
+    await transporter.sendMail({
+      from:    `"Cartório 1º Ofício de Imóveis de Manaus" <${process.env.SMTP_USER}>`,
+      to:      destinatario,
+      subject: assunto,
+      text:    corpo,
+    });
+
+    const nomeUsuario = req.user.nome || req.user.email;
+    await pool.query(
+      `INSERT INTO usucapiao_notas (usucapiao_id, usuario_nome, nota) VALUES ($1, $2, $3)`,
+      [req.params.id, nomeUsuario, `📧 Email enviado para ${destinatario} — Assunto: "${assunto}" — por ${nomeUsuario}`]
+    );
+
+    res.json({ message: 'Email enviado com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ message: `Erro ao enviar email: ${err.message}` });
+  }
 });
 
 // ── REGISTRAR ENVIO DE EMAIL (grava nota automática) ─────────────────────

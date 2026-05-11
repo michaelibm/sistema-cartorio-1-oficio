@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import './Usucapiao.css';
 import {
   getUsucapiao, createUsucapiao, updateUsucapiao, deleteUsucapiao,
-  getNotasUsucapiao, addNotaUsucapiao, registrarEmailUsucapiao,
+  getNotasUsucapiao, addNotaUsucapiao, registrarEmailUsucapiao, enviarEmailSmtp,
 } from '../services/api';
 
 // ── Configs ────────────────────────────────────────────────────────────────
@@ -129,6 +129,10 @@ export default function Usucapiao({ usuario }) {
 
   const [delConfirm, setDelConfirm] = useState(null);
 
+  const [emailModal, setEmailModal]       = useState(null); // { tipo, destinatario, assunto, corpo }
+  const [enviandoEmail, setEnviandoEmail] = useState(false);
+  const [emailErro, setEmailErro]         = useState('');
+
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const carregar = useCallback(async () => {
@@ -214,23 +218,63 @@ export default function Usucapiao({ usuario }) {
     finally { setSalvandoNota(false); }
   };
 
-  const enviarEmail = async (tipo) => {
+  const abrirModalEmail = (tipo) => {
     if (!detalhe) return;
     if (!detalhe.email_cliente) { showMsg('erro', 'Cadastre o email do cliente primeiro.'); return; }
-    const assuntos = {
-      cliente: `Notificação — Matrícula ${detalhe.numero_matricula}`,
-      email:   `Prazo de Manifestação — Matrícula ${detalhe.numero_matricula}`,
-    };
-    const corpos = {
-      cliente: `Prezado(a) ${detalhe.nome_requerente},\n\nInformamos o início do prazo de desídia de 20 dias úteis referente ao processo de ${TITULO_CFG[detalhe.titulo]?.label || 'Usucapião'} — matrícula ${detalhe.numero_matricula}.\n\nAtenciosamente,\nCartório 1º Ofício`,
-      email:   `Prezado(a) ${detalhe.nome_requerente},\n\nSolicitamos manifestação no prazo de 15 dias úteis referente ao processo de ${TITULO_CFG[detalhe.titulo]?.label || 'Usucapião'} — matrícula ${detalhe.numero_matricula}.\n\nAtenciosamente,\nCartório 1º Ofício`,
-    };
-    window.open(`mailto:${detalhe.email_cliente}?subject=${encodeURIComponent(assuntos[tipo])}&body=${encodeURIComponent(corpos[tipo])}`);
+    const tit     = TITULO_CFG[detalhe.titulo]?.label || 'Usucapião';
+    const nome    = detalhe.nome_requerente;
+    const mat     = detalhe.numero_matricula;
+    const rec     = detalhe.numero_recepcao || '—';
+    const entrada = fmt(detalhe.data_entrada) || '—';
+    const atend   = fmt(detalhe.data_envio_atendimento) || '—';
+    const cli     = fmt(detalhe.data_envio_cliente) || '—';
+
+    const corpoCliente =
+`Prezado(a) ${nome}, bom dia.
+
+Informamos que a solicitação de ${tit.toLowerCase()} extrajudicial, ingressada nesta Serventia em ${entrada}, sob protocolo nº ${mat}, recepção ${rec}, apresenta pendências a serem regularizadas.
+
+Solicitamos a gentileza de comparecer à Serventia ou entrar em contato para atendimento das exigências, no prazo de 20 (vinte) dias úteis, sob pena de encerramento do procedimento por desídia.
+
+Atenciosamente,
+Cartório 1º Ofício de Imóveis de Manaus`;
+
+    const corpoManifestacao =
+`Prezado cliente, bom dia.
+
+Cumpre-nos informar que referente à solicitação de reconhecimento de ${tit.toLowerCase()} extrajudicial, ingresso nesta Serventia em ${entrada}, sob protocolo nº ${mat}, recepção ${rec}, cujo requerente é o Sr. ${nome}, foi emitida Nota Técnica Devolutiva, datada de ${atend}, devidamente encaminhada para o interessado aos ${cli}. Temos a informar que até a presente data não houve impulsionamento do procedimento, para atendimento às exigências apontadas em nota devolutiva, decorrendo um lapso temporal de 20 (vinte) dias úteis, com omissão da interessada em atender às exigências legais, previsto na legislação acerca da usucapião.
+
+Portanto, com fulcro no art. 406, §2.º, do Provimento nº 149/2023-CNJ c/c art. 205 da Lei nº 6.015/73 e art. 1.032 §2º do Provimento 531/2026-CGJ/AM, esta Serventia, por meio deste, notifica o requerente, Sr. ${nome}, fixando o prazo preclusivo de 15 (quinze) dias úteis, com advertência de encerramento por desídia e cancelamento da prenotação, estando o novo pedido sujeito a recolhimento de emolumentos e processamento de prenotação, em novo protocolo.`;
+
+    setEmailModal({
+      tipo,
+      destinatario: detalhe.email_cliente,
+      assunto: tipo === 'cliente'
+        ? `Notificação de Pendência — ${tit} — Matrícula ${mat}`
+        : `Notificação de Desídia — ${tit} — Matrícula ${mat} — Prazo Preclusivo 15 dias úteis`,
+      corpo: tipo === 'cliente' ? corpoCliente : corpoManifestacao,
+    });
+    setEmailErro('');
+  };
+
+  const confirmarEnvioEmail = async () => {
+    if (!emailModal || !detalhe) return;
+    setEnviandoEmail(true); setEmailErro('');
     try {
-      await registrarEmailUsucapiao(detalhe.id, tipo);
-      carregarNotas(detalhe.id);
-      showMsg('ok', 'Email aberto e ação registrada nas notas.');
-    } catch { /* silencioso */ }
+      await enviarEmailSmtp(detalhe.id, {
+        assunto:     emailModal.assunto,
+        corpo:       emailModal.corpo,
+        destinatario: emailModal.destinatario,
+      });
+      await registrarEmailUsucapiao(detalhe.id, emailModal.tipo);
+      setEmailModal(null);
+      if (aba === 'notas') carregarNotas(detalhe.id);
+      showMsg('ok', `✅ Email enviado para ${emailModal.destinatario} com sucesso!`);
+    } catch (e) {
+      setEmailErro(e.message);
+    } finally {
+      setEnviandoEmail(false);
+    }
   };
 
   const canEdit = ['Supervisor','Coordenador','Registrador'].includes(usuario?.cargo);
@@ -484,11 +528,11 @@ export default function Usucapiao({ usuario }) {
                   {/* Ações */}
                   <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:'0.875rem', display:'flex', flexDirection:'column', gap:'0.625rem' }}>
                     <div style={{ fontSize:'0.72rem', fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.06em' }}>Ações</div>
-                    <button onClick={() => enviarEmail('cliente')} style={{ padding:'0.65rem 1rem', background:'linear-gradient(135deg,#0891b2,#0e7490)', color:'white', border:'none', borderRadius:'9px', cursor:'pointer', fontWeight:600, fontSize:'0.875rem', textAlign:'left' }}>
+                    <button onClick={() => abrirModalEmail('cliente')} style={{ padding:'0.65rem 1rem', background:'linear-gradient(135deg,#0891b2,#0e7490)', color:'white', border:'none', borderRadius:'9px', cursor:'pointer', fontWeight:600, fontSize:'0.875rem', textAlign:'left' }}>
                       📧 Enviar email p/ cliente — prazo desídia (20 d.u.)
                     </button>
-                    <button onClick={() => enviarEmail('email')} style={{ padding:'0.65rem 1rem', background:'linear-gradient(135deg,#7c3aed,#6d28d9)', color:'white', border:'none', borderRadius:'9px', cursor:'pointer', fontWeight:600, fontSize:'0.875rem', textAlign:'left' }}>
-                      📨 Enviar email de manifestação — prazo (15 d.u.)
+                    <button onClick={() => abrirModalEmail('email')} style={{ padding:'0.65rem 1rem', background:'linear-gradient(135deg,#7c3aed,#6d28d9)', color:'white', border:'none', borderRadius:'9px', cursor:'pointer', fontWeight:600, fontSize:'0.875rem', textAlign:'left' }}>
+                      📨 Notificar desídia — prazo preclusivo (15 d.u.)
                     </button>
                     {canEdit && (
                       <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.25rem' }}>
@@ -586,6 +630,106 @@ export default function Usucapiao({ usuario }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Envio de Email ── */}
+      {emailModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000, padding:'1rem' }}>
+          <div style={{ background:'white', borderRadius:'20px', width:'100%', maxWidth:'680px', boxShadow:'0 25px 60px rgba(0,0,0,.25)', overflow:'hidden', maxHeight:'95vh', display:'flex', flexDirection:'column' }}>
+
+            {/* Header */}
+            <div style={{ padding:'1.25rem 1.75rem', background:'linear-gradient(135deg,#0891b2,#0369a1)', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
+              <div>
+                <h2 style={{ margin:0, color:'white', fontSize:'1.1rem', fontWeight:700 }}>
+                  📧 {emailModal.tipo === 'cliente' ? 'Email ao Cliente — Prazo Desídia' : 'Notificação de Desídia — Prazo Preclusivo'}
+                </h2>
+                <p style={{ margin:'0.2rem 0 0', color:'rgba(255,255,255,.75)', fontSize:'0.8rem' }}>
+                  Confirme os dados antes de enviar. Você pode editar o conteúdo.
+                </p>
+              </div>
+              <button onClick={() => setEmailModal(null)} style={{ background:'rgba(255,255,255,.2)', border:'none', borderRadius:'8px', color:'white', cursor:'pointer', width:'32px', height:'32px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginLeft:'1rem' }}>✕</button>
+            </div>
+
+            <div style={{ overflowY:'auto', flex:1, padding:'1.5rem 1.75rem', display:'flex', flexDirection:'column', gap:'1rem' }}>
+
+              {/* Resumo do processo */}
+              <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:'10px', padding:'0.875rem 1rem', fontSize:'0.85rem' }}>
+                <div style={{ fontWeight:700, color:'#0369a1', marginBottom:'0.4rem', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em' }}>Processo</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.25rem 1.5rem', color:'#0c4a6e' }}>
+                  <span><strong>Requerente:</strong> {detalhe?.nome_requerente}</span>
+                  <span><strong>Matrícula:</strong> {detalhe?.numero_matricula}</span>
+                  <span><strong>N° Recepção:</strong> {detalhe?.numero_recepcao || '—'}</span>
+                  <span><strong>Entrada:</strong> {fmt(detalhe?.data_entrada) || '—'}</span>
+                </div>
+              </div>
+
+              {/* Destinatário */}
+              <div>
+                <label style={{ display:'block', fontSize:'0.8rem', fontWeight:600, color:'#374151', marginBottom:'0.3rem' }}>
+                  Destinatário <span style={{ color:'#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="email"
+                  value={emailModal.destinatario}
+                  onChange={e => setEmailModal(m => ({ ...m, destinatario: e.target.value }))}
+                  style={{ ...inp }}
+                  onFocus={focusC} onBlur={blurC}
+                />
+              </div>
+
+              {/* Assunto */}
+              <div>
+                <label style={{ display:'block', fontSize:'0.8rem', fontWeight:600, color:'#374151', marginBottom:'0.3rem' }}>
+                  Assunto <span style={{ color:'#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={emailModal.assunto}
+                  onChange={e => setEmailModal(m => ({ ...m, assunto: e.target.value }))}
+                  style={{ ...inp }}
+                  onFocus={focusC} onBlur={blurC}
+                />
+              </div>
+
+              {/* Corpo */}
+              <div>
+                <label style={{ display:'block', fontSize:'0.8rem', fontWeight:600, color:'#374151', marginBottom:'0.3rem' }}>
+                  Mensagem <span style={{ color:'#ef4444' }}>*</span>
+                </label>
+                <textarea
+                  value={emailModal.corpo}
+                  onChange={e => setEmailModal(m => ({ ...m, corpo: e.target.value }))}
+                  rows={14}
+                  style={{ ...inp, resize:'vertical', fontFamily:'inherit', lineHeight:1.6 }}
+                  onFocus={focusC} onBlur={blurC}
+                />
+              </div>
+
+              {emailErro && (
+                <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:'8px', padding:'0.75rem 1rem', color:'#991b1b', fontSize:'0.875rem' }}>
+                  ⚠️ {emailErro}
+                </div>
+              )}
+            </div>
+
+            {/* Rodapé */}
+            <div style={{ padding:'1rem 1.75rem', borderTop:'1px solid #e2e8f0', display:'flex', gap:'0.75rem', justifyContent:'flex-end', background:'#f8fafc', flexShrink:0 }}>
+              <div style={{ flex:1, fontSize:'0.78rem', color:'#64748b', alignSelf:'center' }}>
+                Enviando como <strong>registros@1rimanaus.com.br</strong> via SMTP
+              </div>
+              <button onClick={() => setEmailModal(null)} style={{ padding:'0.7rem 1.5rem', border:'1px solid #e2e8f0', borderRadius:'10px', background:'white', cursor:'pointer', fontWeight:600, color:'#475569', fontSize:'0.9rem' }}>
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarEnvioEmail}
+                disabled={enviandoEmail || !emailModal.destinatario || !emailModal.assunto || !emailModal.corpo}
+                style={{ padding:'0.7rem 1.75rem', background:'linear-gradient(135deg,#0891b2,#0369a1)', color:'white', border:'none', borderRadius:'10px', cursor:'pointer', fontWeight:700, fontSize:'0.9rem', opacity: (enviandoEmail || !emailModal.destinatario || !emailModal.assunto || !emailModal.corpo) ? 0.6 : 1 }}
+              >
+                {enviandoEmail ? '⏳ Enviando...' : '📤 Enviar Email'}
+              </button>
+            </div>
           </div>
         </div>
       )}
