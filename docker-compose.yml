@@ -44,6 +44,7 @@ services:
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL}
       SMTP_HOST: ${SMTP_HOST:-smtps.uhserver.com}
       SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURE: ${SMTP_SECURE:-true}
       SMTP_USER: ${SMTP_USER:-registros@1rimanaus.com.br}
       SMTP_PASS: ${SMTP_PASS}
     dns:
