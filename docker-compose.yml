@@ -42,9 +42,9 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_NAME: ${POSTGRES_DB:-cartorio_db}
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL}
-      SMTP_HOST: ${SMTP_HOST:-smtps.uol.com.br}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURE: ${SMTP_SECURE:-true}
       SMTP_USER: ${SMTP_USER:-registros@1rimanaus.com.br}
       SMTP_PASS: ${SMTP_PASS}
     dns:
