@@ -72,6 +72,33 @@ function MinhaProductividade({ usuario }) {
 
   const grupos = dados?.grupos || { aguardando: [], em_andamento: [], concluido: [], cancelado: [] };
 
+  const exportarExcel = () => {
+    const todos = [
+      ...grupos.aguardando.map(p => ({ ...p, status_label: 'Aguardando' })),
+      ...grupos.em_andamento.map(p => ({ ...p, status_label: 'Em Andamento' })),
+      ...grupos.concluido.map(p => ({ ...p, status_label: 'Concluído' })),
+      ...grupos.cancelado.map(p => ({ ...p, status_label: 'Cancelado' })),
+    ];
+    if (!todos.length) { mostrarToast('Nenhum dado para exportar.'); return; }
+
+    const fmt = d => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+    const linhas = [
+      ['Número', 'Serviço', 'Status', 'Data Entrada', 'Data Vencimento', 'Data Conclusão'],
+      ...todos.map(p => [p.numero, p.servico_nome, p.status_label, fmt(p.data_entrada), fmt(p.data_vencimento), fmt(p.data_conclusao)]),
+    ];
+
+    const csv = linhas.map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const bom  = '﻿'; // BOM para Excel reconhecer UTF-8
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const periodoLabel = PERIODOS.find(p => p.key === periodo)?.label || periodo;
+    a.href     = url;
+    a.download = `produtividade_${usuario?.nome?.replace(/\s+/g,'_') || 'registrador'}_${periodoLabel}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{ padding: '2rem', fontFamily: "'DM Sans', system-ui, sans-serif", background: '#f8fafc', minHeight: '100vh' }}>
 
@@ -181,6 +208,26 @@ function MinhaProductividade({ usuario }) {
         {carregando && (
           <span style={{ color: '#94a3b8', fontSize: '0.82rem', marginLeft: '0.5rem' }}>Carregando...</span>
         )}
+
+        <button
+          onClick={exportarExcel}
+          disabled={!dados || dados.total === 0}
+          style={{
+            marginLeft: 'auto',
+            padding: '0.5rem 1.1rem',
+            borderRadius: '8px',
+            border: '1.5px solid #10b981',
+            background: (!dados || dados.total === 0) ? '#f1f5f9' : '#10b981',
+            color: (!dados || dados.total === 0) ? '#94a3b8' : '#fff',
+            fontWeight: '600',
+            fontSize: '0.85rem',
+            cursor: (!dados || dados.total === 0) ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', gap: '0.4rem',
+            transition: 'all 0.15s',
+          }}
+        >
+          📥 Exportar Excel
+        </button>
       </div>
 
       {/* Erro inline */}

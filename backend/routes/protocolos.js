@@ -223,14 +223,28 @@ router.get('/minha-produtividade', authMiddleware, async (req, res) => {
     let dateFilter = '';
     let i = 2;
 
+    // Filtra por data_entrada OU data_conclusao para capturar tanto
+    // protocolos criados quanto concluídos no período
     if (periodo === 'hoje') {
-      dateFilter = ` AND (p.data_entrada AT TIME ZONE 'America/Manaus')::date = (NOW() AT TIME ZONE 'America/Manaus')::date`;
+      dateFilter = ` AND (
+        (p.data_entrada AT TIME ZONE 'America/Manaus')::date = (NOW() AT TIME ZONE 'America/Manaus')::date
+        OR (p.data_conclusao IS NOT NULL AND (p.data_conclusao AT TIME ZONE 'America/Manaus')::date = (NOW() AT TIME ZONE 'America/Manaus')::date)
+      )`;
     } else if (periodo === 'semana') {
-      dateFilter = ` AND p.data_entrada >= date_trunc('week', NOW() AT TIME ZONE 'America/Manaus')`;
+      dateFilter = ` AND (
+        p.data_entrada >= date_trunc('week', NOW() AT TIME ZONE 'America/Manaus')
+        OR (p.data_conclusao IS NOT NULL AND p.data_conclusao >= date_trunc('week', NOW() AT TIME ZONE 'America/Manaus'))
+      )`;
     } else if (periodo === 'mes') {
-      dateFilter = ` AND p.data_entrada >= date_trunc('month', NOW() AT TIME ZONE 'America/Manaus')`;
+      dateFilter = ` AND (
+        p.data_entrada >= date_trunc('month', NOW() AT TIME ZONE 'America/Manaus')
+        OR (p.data_conclusao IS NOT NULL AND p.data_conclusao >= date_trunc('month', NOW() AT TIME ZONE 'America/Manaus'))
+      )`;
     } else if (data_inicio && data_fim) {
-      dateFilter = ` AND p.data_entrada::date >= $${i}::date AND p.data_entrada::date <= $${i+1}::date`;
+      dateFilter = ` AND (
+        (p.data_entrada::date >= $${i}::date AND p.data_entrada::date <= $${i+1}::date)
+        OR (p.data_conclusao IS NOT NULL AND p.data_conclusao::date >= $${i}::date AND p.data_conclusao::date <= $${i+1}::date)
+      )`;
       params.push(data_inicio, data_fim); i += 2;
     }
 
@@ -240,7 +254,7 @@ router.get('/minha-produtividade', authMiddleware, async (req, res) => {
       FROM protocolos p
       JOIN servicos s ON p.servico_id = s.id
       WHERE p.responsavel_id = $1${dateFilter}
-      ORDER BY p.data_entrada DESC
+      ORDER BY COALESCE(p.data_conclusao, p.data_entrada) DESC
     `, params);
 
     const grupos = { aguardando: [], em_andamento: [], concluido: [], cancelado: [] };
