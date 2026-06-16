@@ -42,6 +42,7 @@ const transporter = nodemailer.createTransport({
       `ALTER TABLE usucapiao ADD COLUMN IF NOT EXISTS enviado_atendimento_por     VARCHAR(255)`,
       `ALTER TABLE usucapiao ADD COLUMN IF NOT EXISTS data_envio_cliente          DATE`,
       `ALTER TABLE usucapiao ADD COLUMN IF NOT EXISTS data_envio_email            DATE`,
+      `ALTER TABLE usucapiao ADD COLUMN IF NOT EXISTS data_nova_entrada           DATE`,
     ];
     for (const sql of colunas) await pool.query(sql);
 
@@ -79,7 +80,8 @@ async function comPrazos(rows) {
   return Promise.all(rows.map(async (r) => ({
     ...r,
     prazo_desidia:          await adicionarDiasUteis(r.data_envio_cliente, 20),
-    fim_prazo_manifestacao: await adicionarDiasUteis(r.data_envio_email, 15),
+    // Nova entrada renova os 15 dias; senão usa data_envio_email
+    fim_prazo_manifestacao: await adicionarDiasUteis(r.data_nova_entrada || r.data_envio_email, 15),
   })));
 }
 
@@ -116,7 +118,7 @@ router.post('/', authMiddleware, async (req, res) => {
     const {
       nome_requerente, data_entrada, numero_matricula, status, observacoes,
       numero_recepcao, titulo, responsavel_analise, email_cliente,
-      data_envio_atendimento, data_envio_cliente, data_envio_email,
+      data_envio_atendimento, data_envio_cliente, data_envio_email, data_nova_entrada,
     } = req.body;
     if (!nome_requerente || !data_entrada || !numero_matricula)
       return res.status(400).json({ message: 'Requerente, data de entrada e matrícula são obrigatórios.' });
@@ -128,15 +130,15 @@ router.post('/', authMiddleware, async (req, res) => {
       `INSERT INTO usucapiao
         (nome_requerente, data_entrada, numero_matricula, status, observacoes,
          numero_recepcao, titulo, responsavel_analise, email_cliente,
-         data_envio_atendimento, enviado_atendimento_por, data_envio_cliente, data_envio_email)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+         data_envio_atendimento, enviado_atendimento_por, data_envio_cliente, data_envio_email, data_nova_entrada)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
       [
         nome_requerente, data_entrada, numero_matricula,
         status || 'em_andamento', observacoes || null,
         numero_recepcao || null, titulo || 'usucapiao',
         responsavel_analise || null, email_cliente || null,
         data_envio_atendimento || null, enviadoPor,
-        data_envio_cliente || null, data_envio_email || null,
+        data_envio_cliente || null, data_envio_email || null, data_nova_entrada || null,
       ]
     );
     const [row] = await comPrazos(result.rows);
@@ -150,7 +152,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
     const {
       nome_requerente, data_entrada, numero_matricula, status, observacoes,
       numero_recepcao, titulo, responsavel_analise, email_cliente,
-      data_envio_atendimento, data_envio_cliente, data_envio_email,
+      data_envio_atendimento, data_envio_cliente, data_envio_email, data_nova_entrada,
     } = req.body;
 
     // Verifica se data_envio_atendimento está sendo preenchida agora
@@ -159,9 +161,9 @@ router.put('/:id', authMiddleware, async (req, res) => {
     const nomeUsuario = req.user.nome || req.user.email;
     let enviadoPor = registroAtual?.enviado_atendimento_por || null;
     if (data_envio_atendimento && !registroAtual?.data_envio_atendimento) {
-      enviadoPor = nomeUsuario; // preencheu agora pela primeira vez
+      enviadoPor = nomeUsuario;
     } else if (!data_envio_atendimento) {
-      enviadoPor = null; // campo foi limpo
+      enviadoPor = null;
     }
 
     const result = await pool.query(
@@ -170,15 +172,15 @@ router.put('/:id', authMiddleware, async (req, res) => {
         status=$4, observacoes=$5, numero_recepcao=$6, titulo=$7,
         responsavel_analise=$8, email_cliente=$9,
         data_envio_atendimento=$10, enviado_atendimento_por=$11,
-        data_envio_cliente=$12, data_envio_email=$13, updated_at=NOW()
-       WHERE id=$14 RETURNING *`,
+        data_envio_cliente=$12, data_envio_email=$13, data_nova_entrada=$14, updated_at=NOW()
+       WHERE id=$15 RETURNING *`,
       [
         nome_requerente, data_entrada, numero_matricula,
         status, observacoes || null,
         numero_recepcao || null, titulo || 'usucapiao',
         responsavel_analise || null, email_cliente || null,
         data_envio_atendimento || null, enviadoPor,
-        data_envio_cliente || null, data_envio_email || null,
+        data_envio_cliente || null, data_envio_email || null, data_nova_entrada || null,
         req.params.id,
       ]
     );

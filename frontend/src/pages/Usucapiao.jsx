@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import './Usucapiao.css';
 import {
   getUsucapiao, createUsucapiao, updateUsucapiao, deleteUsucapiao,
@@ -19,6 +19,7 @@ const FORM_VAZIO = {
   numero_recepcao:'', titulo:'usucapiao', nome_requerente:'', numero_matricula:'',
   responsavel_analise:'', email_cliente:'', data_entrada:'',
   data_envio_atendimento:'', data_envio_cliente:'', data_envio_email:'',
+  data_nova_entrada:'',
   status:'em_andamento', observacoes:'',
 };
 
@@ -129,6 +130,8 @@ export default function Usucapiao({ usuario }) {
   const [salvandoNota, setSalvandoNota] = useState(false);
 
   const [delConfirm, setDelConfirm] = useState(null);
+  const [novaEntradaVal, setNovaEntradaVal] = useState('');
+  const [salvandoNovaEntrada, setSalvandoNovaEntrada] = useState(false);
 
   const [emailModal, setEmailModal]       = useState(null); // { tipo, destinatario, assunto, corpo }
   const [enviandoEmail, setEnviandoEmail] = useState(false);
@@ -174,6 +177,7 @@ export default function Usucapiao({ usuario }) {
       data_envio_atendimento: reg.data_envio_atendimento?.split('T')[0] || '',
       data_envio_cliente:     reg.data_envio_cliente?.split('T')[0] || '',
       data_envio_email:       reg.data_envio_email?.split('T')[0] || '',
+      data_nova_entrada:      reg.data_nova_entrada?.split('T')[0] || '',
       status:                 reg.status || 'em_andamento',
       observacoes:            reg.observacoes || '',
     });
@@ -271,8 +275,21 @@ Portanto, com fulcro no art. 406, §2.º, do Provimento nº 149/2023-CNJ c/c art
     }
   };
 
+  const salvarNovaEntrada = async () => {
+    if (!novaEntradaVal || !detalhe) return;
+    setSalvandoNovaEntrada(true);
+    try {
+      const atualizado = await updateUsucapiao(detalhe.id, { ...detalhe, data_nova_entrada: novaEntradaVal });
+      setDetalhe(atualizado);
+      setNovaEntradaVal('');
+      carregar();
+      showMsg('ok', `Prazo renovado a partir de ${fmt(novaEntradaVal)}.`);
+    } catch (e) { showMsg('erro', e.message); }
+    finally { setSalvandoNovaEntrada(false); }
+  };
+
   const canEdit = ['Supervisor','Coordenador','Registrador'].includes(usuario?.cargo);
-  const abrirDetalhe = (reg) => { setDetalhe(reg); setAba('dados'); setNovaNota(''); };
+  const abrirDetalhe = (reg) => { setDetalhe(reg); setAba('dados'); setNovaNota(''); setNovaEntradaVal(''); };
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -476,23 +493,44 @@ Portanto, com fulcro no art. 406, §2.º, do Provimento nº 149/2023-CNJ c/c art
 
                   {/* Cards de prazos */}
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>
-                    <PrazoCard label="Entrada" data={detalhe.data_entrada ? detalhe.data_entrada.split('T')[0] : null} noStatus={!!detalhe.data_envio_cliente}/>
+
+                    {/* Entradas — histórico */}
+                    <div style={{ gridColumn:'span 2', display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+                      {/* 1ª Entrada */}
+                      <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', background:'#f8fafc', borderRadius:'8px', padding:'0.55rem 0.75rem' }}>
+                        <span style={{ fontSize:'0.68rem', fontWeight:700, color:'#fff', background:'#94a3b8', borderRadius:'4px', padding:'0.1rem 0.4rem', flexShrink:0 }}>1ª</span>
+                        <div>
+                          <div style={{ fontSize:'0.68rem', color:'#94a3b8', fontWeight:600, textTransform:'uppercase' }}>Entrada</div>
+                          <div style={{ fontWeight:700, color:'#1e293b', fontSize:'0.875rem' }}>{fmt(detalhe.data_entrada) || '—'}</div>
+                        </div>
+                      </div>
+                      {/* 2ª Entrada — se existir */}
+                      {detalhe.data_nova_entrada && (
+                        <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', background:'#eef2ff', border:'1.5px solid #a5b4fc', borderRadius:'8px', padding:'0.55rem 0.75rem' }}>
+                          <span style={{ fontSize:'0.68rem', fontWeight:700, color:'#fff', background:'#6366f1', borderRadius:'4px', padding:'0.1rem 0.4rem', flexShrink:0 }}>2ª</span>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:'0.68rem', color:'#6366f1', fontWeight:600, textTransform:'uppercase' }}>Nova Entrada — prazo renovado</div>
+                            <div style={{ fontWeight:700, color:'#4338ca', fontSize:'0.875rem' }}>{fmt(detalhe.data_nova_entrada)}</div>
+                          </div>
+                          <div style={{ fontSize:'0.72rem', color:'#6366f1', fontWeight:600, textAlign:'right' }}>🔄 +15 d.u.</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Responsável */}
                     <div style={{ background:'#f8fafc', borderRadius:'8px', padding:'0.625rem 0.75rem' }}>
                       <div style={{ fontSize:'0.72rem', fontWeight:600, color:'#94a3b8', textTransform:'uppercase', marginBottom:'0.2rem' }}>Responsável</div>
                       <div style={{ fontWeight:600, color:'#1e293b', fontSize:'0.875rem' }}>{detalhe.responsavel_analise || '—'}</div>
                     </div>
 
-                    {/* Prazo Desídia — conta se data_envio_cliente preenchida; se só email enviado mostra aviso verde */}
+                    {/* Prazo Desídia */}
                     <div style={{ background:'#f8fafc', borderRadius:'8px', padding:'0.625rem 0.75rem' }}>
                       <div style={{ fontSize:'0.72rem', fontWeight:600, color:'#94a3b8', textTransform:'uppercase', marginBottom:'0.2rem' }}>Envio p/ Cliente</div>
                       <div style={{ fontWeight:600, color:'#1e293b', fontSize:'0.875rem' }}>{fmt(detalhe.data_envio_cliente) || '—'}</div>
                     </div>
                     <div>
                       {detalhe.data_envio_cliente ? (
-                        <PrazoCard
-                          label="Prazo Desídia (20 d.u.)"
-                          data={detalhe.prazo_desidia}
-                        />
+                        <PrazoCard label="Prazo Desídia (20 d.u.)" data={detalhe.prazo_desidia}/>
                       ) : detalhe.data_envio_email ? (
                         <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:'8px', padding:'0.625rem 0.75rem' }}>
                           <div style={{ fontSize:'0.72rem', fontWeight:600, color:'#94a3b8', textTransform:'uppercase', marginBottom:'0.2rem' }}>Prazo Desídia (20 d.u.)</div>
@@ -500,15 +538,11 @@ Portanto, com fulcro no art. 406, §2.º, do Provimento nº 149/2023-CNJ c/c art
                           <div style={{ fontSize:'0.72rem', color:'#16a34a', marginTop:2 }}>{fmt(detalhe.data_envio_email)}</div>
                         </div>
                       ) : (
-                        <PrazoCard
-                          label="Prazo Desídia (20 d.u.)"
-                          data={null}
-                          aviso="Preencha envio p/ cliente para iniciar contagem"
-                        />
+                        <PrazoCard label="Prazo Desídia (20 d.u.)" data={null} aviso="Preencha envio p/ cliente para iniciar contagem"/>
                       )}
                     </div>
 
-                    {/* Fim Manifestação — só conta se data_envio_email preenchida */}
+                    {/* Fim Manifestação */}
                     <div style={{ background:'#f8fafc', borderRadius:'8px', padding:'0.625rem 0.75rem' }}>
                       <div style={{ fontSize:'0.72rem', fontWeight:600, color:'#94a3b8', textTransform:'uppercase', marginBottom:'0.2rem' }}>Envio do Email</div>
                       <div style={{ fontWeight:600, color:'#1e293b', fontSize:'0.875rem' }}>{fmt(detalhe.data_envio_email) || '—'}</div>
@@ -546,6 +580,37 @@ Portanto, com fulcro no art. 406, §2.º, do Provimento nº 149/2023-CNJ c/c art
                     <button onClick={() => abrirModalEmail('email')} style={{ padding:'0.65rem 1rem', background:'linear-gradient(135deg,#7c3aed,#6d28d9)', color:'white', border:'none', borderRadius:'9px', cursor:'pointer', fontWeight:600, fontSize:'0.875rem', textAlign:'left' }}>
                       📨 Notificar desídia — prazo preclusivo (15 d.u.)
                     </button>
+
+                    {/* Nova Data de Entrada */}
+                    {canEdit && (
+                      <div style={{ background:'#eef2ff', border:'1.5px solid #a5b4fc', borderRadius:'10px', padding:'0.75rem 0.875rem' }}>
+                        <div style={{ fontSize:'0.72rem', fontWeight:700, color:'#6366f1', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.5rem' }}>
+                          🔄 Nova Data de Entrada — renova prazo (15 d.u.)
+                        </div>
+                        {detalhe.data_nova_entrada && (
+                          <div style={{ fontSize:'0.8rem', color:'#4338ca', fontWeight:600, marginBottom:'0.4rem' }}>
+                            Atual: {fmt(detalhe.data_nova_entrada)}
+                          </div>
+                        )}
+                        <div style={{ display:'flex', gap:'0.5rem' }}>
+                          <input
+                            type="date"
+                            value={novaEntradaVal}
+                            onChange={e => setNovaEntradaVal(e.target.value)}
+                            style={{ ...inp, flex:1, fontSize:'0.85rem', padding:'0.5rem 0.75rem' }}
+                            onFocus={focusC} onBlur={blurC}
+                          />
+                          <button
+                            onClick={salvarNovaEntrada}
+                            disabled={salvandoNovaEntrada || !novaEntradaVal}
+                            style={{ padding:'0.5rem 0.875rem', background: (!novaEntradaVal || salvandoNovaEntrada) ? '#c7d2fe' : '#6366f1', color:'white', border:'none', borderRadius:'8px', cursor: (!novaEntradaVal || salvandoNovaEntrada) ? 'not-allowed' : 'pointer', fontWeight:700, fontSize:'0.85rem', whiteSpace:'nowrap' }}
+                          >
+                            {salvandoNovaEntrada ? '...' : 'Renovar'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {canEdit && (
                       <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.25rem' }}>
                         <button onClick={() => abrirEdicao(detalhe)} style={{ flex:1, padding:'0.65rem', border:'1px solid #e2e8f0', borderRadius:'9px', background:'white', cursor:'pointer', fontWeight:600, fontSize:'0.875rem', color:'#475569' }}>
@@ -626,6 +691,9 @@ Portanto, com fulcro no art. 406, §2.º, do Provimento nº 149/2023-CNJ c/c art
                 </F>
                 <F label="Envio do Email — início manifestação (15 d.u.)" half hint="A contagem só inicia quando este campo for preenchido.">
                   <input type="date" value={form.data_envio_email} onChange={set('data_envio_email')} style={inp} onFocus={focusC} onBlur={blurC}/>
+                </F>
+                <F label="Nova Data de Entrada — renova prazo (15 d.u.)" span2 hint="Quando preenchida, renova automaticamente o prazo de manifestação por mais 15 dias úteis a partir desta data.">
+                  <input type="date" value={form.data_nova_entrada} onChange={set('data_nova_entrada')} style={{ ...inp, borderColor: form.data_nova_entrada ? '#6366f1' : undefined }} onFocus={focusC} onBlur={blurC}/>
                 </F>
 
                 <Sec title="Situação"/>
