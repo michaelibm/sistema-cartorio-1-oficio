@@ -375,11 +375,16 @@ Portanto, com fulcro no art. 406, §2.º, do Provimento nº 149/2023-CNJ c/c art
                           )}
                         </td>
                         <td style={{ padding:'0.75rem 1rem' }}><Badge cfg={st}/></td>
-                        {/* Prazo só aparece se data_envio_cliente preenchida */}
+                        {/* Prazo Desídia */}
                         <td style={{ padding:'0.75rem 1rem' }}>
                           {reg.data_envio_cliente
                             ? <PrazoCell data={reg.prazo_desidia}/>
-                            : <span style={{ fontSize:'0.75rem', color:'#94a3b8', fontStyle:'italic' }}>Aguard. envio cliente</span>
+                            : reg.data_envio_email
+                              ? <div>
+                                  <div style={{ fontSize:'0.75rem', color:'#10b981', fontWeight:700 }}>✅ Email enviado</div>
+                                  <div style={{ fontSize:'0.72rem', color:'#64748b', marginTop:2 }}>{fmt(reg.data_envio_email)}</div>
+                                </div>
+                              : <span style={{ fontSize:'0.75rem', color:'#94a3b8', fontStyle:'italic' }}>Aguard. envio cliente</span>
                           }
                         </td>
                         <td style={{ padding:'0.75rem 1rem' }}>
@@ -477,17 +482,30 @@ Portanto, com fulcro no art. 406, §2.º, do Provimento nº 149/2023-CNJ c/c art
                       <div style={{ fontWeight:600, color:'#1e293b', fontSize:'0.875rem' }}>{detalhe.responsavel_analise || '—'}</div>
                     </div>
 
-                    {/* Prazo Desídia — só conta se data_envio_cliente preenchida */}
+                    {/* Prazo Desídia — conta se data_envio_cliente preenchida; se só email enviado mostra aviso verde */}
                     <div style={{ background:'#f8fafc', borderRadius:'8px', padding:'0.625rem 0.75rem' }}>
                       <div style={{ fontSize:'0.72rem', fontWeight:600, color:'#94a3b8', textTransform:'uppercase', marginBottom:'0.2rem' }}>Envio p/ Cliente</div>
                       <div style={{ fontWeight:600, color:'#1e293b', fontSize:'0.875rem' }}>{fmt(detalhe.data_envio_cliente) || '—'}</div>
                     </div>
                     <div>
-                      <PrazoCard
-                        label="Prazo Desídia (20 d.u.)"
-                        data={detalhe.data_envio_cliente ? detalhe.prazo_desidia : null}
-                        aviso="Preencha envio p/ cliente para iniciar contagem"
-                      />
+                      {detalhe.data_envio_cliente ? (
+                        <PrazoCard
+                          label="Prazo Desídia (20 d.u.)"
+                          data={detalhe.prazo_desidia}
+                        />
+                      ) : detalhe.data_envio_email ? (
+                        <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:'8px', padding:'0.625rem 0.75rem' }}>
+                          <div style={{ fontSize:'0.72rem', fontWeight:600, color:'#94a3b8', textTransform:'uppercase', marginBottom:'0.2rem' }}>Prazo Desídia (20 d.u.)</div>
+                          <div style={{ fontWeight:700, color:'#10b981', fontSize:'0.875rem' }}>✅ Email enviado</div>
+                          <div style={{ fontSize:'0.72rem', color:'#16a34a', marginTop:2 }}>{fmt(detalhe.data_envio_email)}</div>
+                        </div>
+                      ) : (
+                        <PrazoCard
+                          label="Prazo Desídia (20 d.u.)"
+                          data={null}
+                          aviso="Preencha envio p/ cliente para iniciar contagem"
+                        />
+                      )}
                     </div>
 
                     {/* Fim Manifestação — só conta se data_envio_email preenchida */}
