@@ -1,38 +1,25 @@
 import { useState } from 'react';
 import { login } from '../services/api';
-import '../styles/Login.css';
 
+const BARS = [
+  { label: 'Jan', v: 62 }, { label: 'Fev', v: 78 }, { label: 'Mar', v: 55 },
+  { label: 'Abr', v: 91 }, { label: 'Mai', v: 74 }, { label: 'Jun', v: 88 },
+  { label: 'Jul', v: 47 }, { label: 'Ago', v: 95 }, { label: 'Set', v: 83 },
+  { label: 'Out', v: 70 }, { label: 'Nov', v: 61 }, { label: 'Dez', v: 79 },
+];
 
-const BALLS = Array.from({ length: 20 }, (_, i) => ({
-  id: i,
-  left:     `${Math.random() * 100}%`,
-  delay:    `${Math.random() * 14}s`,
-  duration: `${12 + Math.random() * 10}s`,
-  size:     `${18 + Math.random() * 20}px`,
-  opacity:  0.4 + Math.random() * 0.45,
-  swing:    `${15 + Math.random() * 35}px`,
-}));
-
-function Ball({ left, delay, duration, size, opacity, swing }) {
-  return (
-    <div style={{
-      position: 'fixed', left, top: '-50px',
-      fontSize: size, opacity,
-      animation: `ballFloat ${duration} ${delay} infinite ease-in-out`,
-      pointerEvents: 'none', zIndex: 0, userSelect: 'none',
-      '--swing': swing,
-    }}>
-      ⚽
-    </div>
-  );
-}
+const STATS = [
+  { icon: '📋', label: 'Protocolos', value: '1.284' },
+  { icon: '✅', label: 'Concluídos', value: '947'   },
+  { icon: '⏱️', label: 'Prazo Médio', value: '4,2d'  },
+  { icon: '👥', label: 'Usuários',    value: '18'    },
+];
 
 function Login({ onLogin }) {
-  const [email, setEmail]       = useState('');
-  const [senha, setSenha]       = useState('');
-  const [erro, setErro]         = useState('');
+  const [email, setEmail]           = useState('');
+  const [senha, setSenha]           = useState('');
+  const [erro, setErro]             = useState('');
   const [carregando, setCarregando] = useState(false);
-  const [fechou, setFechou]     = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -41,399 +28,409 @@ function Login({ onLogin }) {
       const r = await login(email, senha);
       onLogin(r.token, r.usuario);
     } catch (err) {
-      setErro(err.message || 'Erro ao fazer login');
+      setErro(err.message || 'Credenciais inválidas');
     } finally { setCarregando(false); }
   };
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        * { box-sizing: border-box; }
-
-        @keyframes ballFloat {
-          0%   { transform: translateY(-50px) translateX(0) rotate(0deg);   opacity: 0; }
-          8%   { opacity: 1; }
-          50%  { transform: translateY(48vh)  translateX(var(--swing, 25px)) rotate(200deg); }
-          92%  { opacity: 0.6; }
-          100% { transform: translateY(108vh) translateX(0) rotate(400deg); opacity: 0; }
-        }
-
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(32px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes shimmerCopa {
-          0%   { background-position: -300% center; }
-          100% { background-position: 300% center; }
-        }
-
-        @keyframes glowGreen {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(45,158,0,0.2), 0 0 30px rgba(10,80,0,0.2); }
-          50%       { box-shadow: 0 0 0 14px rgba(45,158,0,0), 0 0 50px rgba(10,80,0,0.3); }
-        }
-
-        @keyframes trophyPulse {
-          0%, 100% { transform: scale(1); }
-          15%       { transform: scale(1.18); }
-          30%       { transform: scale(1); }
-          45%       { transform: scale(1.1); }
-        }
-
-        @keyframes ribbonIn {
-          from { transform: translateY(-20px); opacity: 0; }
-          to   { transform: translateY(0);     opacity: 1; }
-        }
-
-        @keyframes orbFloat {
-          0%, 100% { transform: translateY(0) scale(1); }
-          50%       { transform: translateY(-30px) scale(1.05); }
-        }
-
-        .dm-login-wrap {
+        .login-root {
           min-height: 100vh;
           display: flex;
-          align-items: center;
-          justify-content: center;
+          font-family: 'Inter', system-ui, sans-serif;
+          background: #0f172a;
+        }
+
+        /* ── Lado esquerdo ── */
+        .login-left {
+          flex: 1;
+          background: linear-gradient(145deg, #0f172a 0%, #1e293b 50%, #0f1a2e 100%);
+          padding: 3rem;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
           position: relative;
           overflow: hidden;
-          font-family: 'DM Sans', sans-serif;
-          background:
-            radial-gradient(ellipse at 20% 20%, rgba(20,100,0,0.45) 0%, transparent 55%),
-            radial-gradient(ellipse at 80% 80%, rgba(30,120,0,0.35) 0%, transparent 55%),
-            radial-gradient(ellipse at 50% 50%, rgba(10,60,0,0.5) 0%, transparent 70%),
-            linear-gradient(160deg, #0a2800 0%, #1a4a00 35%, #0d3300 65%, #061800 100%);
         }
-
-        /* Orbs decorativos verde/amarelo */
-        .dm-orb {
-          position: fixed;
-          border-radius: 50%;
-          pointer-events: none;
-          z-index: 0;
-          filter: blur(90px);
-        }
-        .dm-orb-1 {
-          width: 560px; height: 560px;
-          background: radial-gradient(circle, rgba(45,158,0,0.25) 0%, transparent 70%);
-          top: -150px; left: -150px;
-          animation: orbFloat 8s ease-in-out infinite;
-        }
-        .dm-orb-2 {
-          width: 420px; height: 420px;
-          background: radial-gradient(circle, rgba(245,197,24,0.15) 0%, transparent 70%);
-          bottom: -100px; right: -100px;
-          animation: orbFloat 10s ease-in-out infinite reverse;
-        }
-        .dm-orb-3 {
-          width: 280px; height: 280px;
-          background: radial-gradient(circle, rgba(0,48,135,0.18) 0%, transparent 70%);
-          top: 45%; left: 65%;
-          animation: orbFloat 7s ease-in-out infinite 2s;
-        }
-
-        /* Linha decorativa */
-        .dm-gold-line {
-          position: fixed;
-          top: 0; bottom: 0;
-          left: 50%;
-          width: 1px;
-          background: linear-gradient(180deg, transparent, rgba(245,197,24,0.07) 30%, rgba(245,197,24,0.11) 50%, rgba(245,197,24,0.07) 70%, transparent);
-          pointer-events: none;
-          z-index: 0;
-        }
-
-        .dm-card {
-          position: relative;
-          z-index: 10;
-          width: 100%;
-          max-width: 430px;
-          margin: 1.5rem;
-          animation: fadeUp 0.75s cubic-bezier(0.22,1,0.36,1) both;
-        }
-
-        /* Banner Copa do Mundo */
-        .dm-banner {
-          border-radius: 20px 20px 0 0;
-          padding: 1.5rem 1.75rem 1.25rem;
-          text-align: center;
-          position: relative;
-          overflow: hidden;
-          background: linear-gradient(
-            135deg,
-            #c8860a 0%, #e8a820 20%, #f5c518 40%,
-            #ffe066 50%, #f5c518 60%, #e8a820 80%, #c8860a 100%
-          );
-          background-size: 300% auto;
-          animation: ribbonIn 0.6s 0.3s ease both, shimmerCopa 5s linear infinite;
-          border-bottom: 1px solid rgba(200,134,10,0.4);
-        }
-        .dm-banner::before {
-          content: '';
-          position: absolute; inset: 0;
-          background:
-            repeating-linear-gradient(
-              45deg,
-              transparent, transparent 12px,
-              rgba(255,255,255,0.04) 12px,
-              rgba(255,255,255,0.04) 24px
-            );
-        }
-        .dm-banner::after {
+        .login-left::before {
           content: '';
           position: absolute;
-          bottom: 0; left: 10%; right: 10%; height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+          width: 600px; height: 600px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%);
+          top: -200px; right: -200px;
+          pointer-events: none;
+        }
+        .login-left::after {
+          content: '';
+          position: absolute;
+          width: 400px; height: 400px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%);
+          bottom: -100px; left: -100px;
+          pointer-events: none;
         }
 
-        .dm-trophy {
-          font-size: 2rem;
-          display: block;
-          margin-bottom: 0.4rem;
-          animation: trophyPulse 2.2s ease-in-out infinite;
-          filter: drop-shadow(0 2px 12px rgba(200,134,10,0.6));
+        .login-brand {
+          display: flex;
+          align-items: center;
+          gap: 0.875rem;
+          position: relative;
+          z-index: 1;
         }
-        .dm-banner-title {
-          font-family: 'Playfair Display', serif;
-          font-size: 1.45rem;
+        .login-brand-icon {
+          width: 44px; height: 44px;
+          background: linear-gradient(135deg, #6366f1, #4f46e5);
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.3rem;
+          box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+        }
+        .login-brand-name {
+          font-size: 1.1rem;
           font-weight: 700;
-          font-style: italic;
-          color: #1a0e00;
-          margin: 0 0 0.3rem;
-          text-shadow: 0 1px 4px rgba(255,255,255,0.3);
+          color: #f1f5f9;
+          letter-spacing: -0.3px;
+        }
+        .login-brand-sub {
+          font-size: 0.72rem;
+          color: #64748b;
+          font-weight: 500;
+          margin-top: 1px;
+        }
+
+        /* Headline */
+        .login-headline {
+          position: relative;
+          z-index: 1;
+        }
+        .login-headline h2 {
+          font-size: 2.4rem;
+          font-weight: 800;
+          color: #f1f5f9;
+          line-height: 1.15;
+          letter-spacing: -1px;
+          margin-bottom: 0.875rem;
+        }
+        .login-headline h2 span {
+          background: linear-gradient(135deg, #6366f1, #818cf8);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+        .login-headline p {
+          color: #64748b;
+          font-size: 0.95rem;
+          line-height: 1.65;
+          max-width: 400px;
+        }
+
+        /* Stats */
+        .login-stats {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.875rem;
+          position: relative;
+          z-index: 1;
+        }
+        .login-stat-card {
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.07);
+          border-radius: 14px;
+          padding: 1rem 1.25rem;
+          backdrop-filter: blur(8px);
+          transition: background 0.2s;
+        }
+        .login-stat-card:hover { background: rgba(255,255,255,0.07); }
+        .login-stat-icon { font-size: 1.3rem; margin-bottom: 0.5rem; }
+        .login-stat-value {
+          font-size: 1.6rem;
+          font-weight: 800;
+          color: #f1f5f9;
+          letter-spacing: -0.5px;
+          line-height: 1;
+        }
+        .login-stat-label {
+          font-size: 0.72rem;
+          color: #64748b;
+          font-weight: 500;
+          margin-top: 0.25rem;
+          text-transform: uppercase;
           letter-spacing: 0.5px;
         }
-        .dm-banner-quote {
-          font-size: 0.8rem;
-          color: rgba(40,20,0,0.85);
-          margin: 0;
+
+        /* Gráfico de barras */
+        .login-chart-wrap {
+          position: relative;
+          z-index: 1;
+        }
+        .login-chart-title {
+          font-size: 0.75rem;
           font-weight: 600;
-          line-height: 1.5;
-          letter-spacing: 0.2px;
+          color: #475569;
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
+          margin-bottom: 0.875rem;
         }
-        .dm-banner-flowers {
-          font-size: 1.1rem;
-          margin-top: 0.6rem;
-          display: block;
-          letter-spacing: 0.3rem;
-          filter: drop-shadow(0 2px 6px rgba(200,134,10,0.5));
+        .login-chart {
+          display: flex;
+          align-items: flex-end;
+          gap: 5px;
+          height: 72px;
         }
-        .dm-banner-close {
-          position: absolute;
-          top: 0.6rem; right: 0.75rem;
-          background: rgba(0,0,0,0.12);
-          border: 1px solid rgba(0,0,0,0.15);
-          color: rgba(30,15,0,0.7);
-          border-radius: 50%;
-          width: 24px; height: 24px;
-          font-size: 0.65rem;
-          cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          transition: all 0.2s;
-        }
-        .dm-banner-close:hover {
-          background: rgba(0,0,0,0.22);
-          color: #1a0e00;
-        }
-
-        /* Card formulário */
-        .dm-form-card {
-          background: rgba(255,255,255,0.04);
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
-          border: 1px solid rgba(255,255,255,0.07);
-          border-top: none;
-          border-radius: 0 0 22px 22px;
-          padding: 2rem 2rem 1.5rem;
-        }
-        .dm-form-card.solo {
-          border-radius: 22px;
-          border-top: 1px solid rgba(255,255,255,0.07);
-        }
-
-        .dm-logo-area {
+        .login-bar-wrap {
+          flex: 1;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 0.875rem;
-          margin-bottom: 1.5rem;
+          gap: 4px;
+          height: 100%;
+          justify-content: flex-end;
         }
-        .dm-logo {
-          width: 68px; height: 68px;
-          object-fit: contain;
+        .login-bar {
+          width: 100%;
+          border-radius: 4px 4px 0 0;
+          background: linear-gradient(180deg, #6366f1, #4338ca);
+          transition: opacity 0.2s;
+          min-height: 4px;
+        }
+        .login-bar.active { background: linear-gradient(180deg, #818cf8, #6366f1); }
+        .login-bar-lbl {
+          font-size: 0.6rem;
+          color: #475569;
+          font-weight: 500;
+        }
+
+        /* ── Lado direito ── */
+        .login-right {
+          width: 440px;
+          flex-shrink: 0;
+          background: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 3rem 2.75rem;
+          position: relative;
+        }
+        .login-right::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; bottom: 0;
+          width: 1px;
+          background: linear-gradient(180deg, transparent, rgba(99,102,241,0.15) 40%, rgba(99,102,241,0.15) 60%, transparent);
+        }
+
+        .login-form-wrap {
+          width: 100%;
+          max-width: 340px;
+          animation: fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) both;
+        }
+
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(24px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .login-form-icon {
+          width: 56px; height: 56px;
+          background: linear-gradient(135deg, #6366f1, #4f46e5);
           border-radius: 16px;
-          padding: 6px;
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(45,158,0,0.3);
-          animation: glowGreen 4s ease-in-out infinite;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.6rem;
+          margin-bottom: 1.5rem;
+          box-shadow: 0 8px 24px rgba(99,102,241,0.35);
         }
-        .dm-logo-title {
-          font-family: 'Playfair Display', serif;
-          font-size: 1.2rem;
-          font-weight: 600;
-          color: #e8f5d0;
-          text-align: center;
-          margin: 0;
-          line-height: 1.3;
-        }
-        .dm-logo-sub {
-          font-size: 0.72rem;
-          color: rgba(255,255,255,0.35);
-          text-align: center;
-          margin: 0.15rem 0 0;
-          letter-spacing: 1px;
-          text-transform: uppercase;
-        }
-
-        .dm-divider {
-          height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(45,158,0,0.45), transparent);
-          margin: 0 0 1.5rem;
-        }
-
-        .dm-label {
-          display: block;
-          font-size: 0.72rem;
-          font-weight: 600;
-          color: rgba(200,240,180,0.45);
-          text-transform: uppercase;
-          letter-spacing: 1px;
+        .login-form-title {
+          font-size: 1.6rem;
+          font-weight: 800;
+          color: #0f172a;
+          letter-spacing: -0.5px;
           margin-bottom: 0.4rem;
         }
-        .dm-input {
+        .login-form-sub {
+          font-size: 0.875rem;
+          color: #64748b;
+          margin-bottom: 2rem;
+        }
+
+        .login-field-label {
+          display: block;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #374151;
+          margin-bottom: 0.4rem;
+        }
+        .login-field-wrap {
+          position: relative;
+          margin-bottom: 1.1rem;
+        }
+        .login-field-wrap input {
           width: 100%;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 10px;
           padding: 0.8rem 1rem;
-          color: #e8f5d0;
+          border: 1.5px solid #e2e8f0;
+          border-radius: 10px;
           font-size: 0.9rem;
-          font-family: 'DM Sans', sans-serif;
+          font-family: 'Inter', sans-serif;
+          color: #0f172a;
           outline: none;
-          transition: border-color 0.25s, background 0.25s, box-shadow 0.25s;
-          margin-bottom: 1rem;
+          background: #fafafa;
+          transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
         }
-        .dm-input::placeholder { color: rgba(255,255,255,0.18); }
-        .dm-input:focus {
-          border-color: rgba(100,200,50,0.5);
-          background: rgba(255,255,255,0.07);
-          box-shadow: 0 0 0 3px rgba(100,200,50,0.08);
+        .login-field-wrap input::placeholder { color: #94a3b8; }
+        .login-field-wrap input:focus {
+          border-color: #6366f1;
+          background: #fff;
+          box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
         }
 
-        .dm-alert {
-          background: rgba(220,38,38,0.12);
-          border: 1px solid rgba(220,38,38,0.25);
+        .login-alert {
+          background: #fef2f2;
+          border: 1px solid #fecaca;
           border-radius: 8px;
-          padding: 0.625rem 0.875rem;
-          color: #fca5a5;
-          font-size: 0.85rem;
-          margin-bottom: 1rem;
+          padding: 0.7rem 0.9rem;
+          color: #dc2626;
+          font-size: 0.84rem;
+          margin-bottom: 1.1rem;
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
         }
 
-        .dm-btn {
+        .login-submit {
           width: 100%;
-          padding: 0.9rem;
+          padding: 0.875rem;
+          background: linear-gradient(135deg, #6366f1, #4f46e5);
+          color: #fff;
           border: none;
           border-radius: 10px;
-          font-family: 'DM Sans', sans-serif;
+          font-family: 'Inter', sans-serif;
           font-size: 0.95rem;
           font-weight: 600;
           cursor: pointer;
-          margin-top: 0.25rem;
-          letter-spacing: 0.5px;
-          transition: all 0.25s;
-          position: relative;
-          overflow: hidden;
-          background: linear-gradient(
-            135deg,
-            #1a6b00 0%, #2d9e00 30%, #3ab800 50%, #f5c518 70%, #2d9e00 85%, #1a6b00 100%
-          );
-          background-size: 250% auto;
-          color: #fff;
-          text-shadow: 0 1px 3px rgba(0,0,0,0.4);
-          box-shadow: 0 4px 20px rgba(45,158,0,0.35), 0 1px 0 rgba(255,255,255,0.1) inset;
-          animation: shimmerCopa 4s linear infinite;
+          letter-spacing: 0.3px;
+          box-shadow: 0 4px 16px rgba(99,102,241,0.4);
+          transition: all 0.2s;
+          margin-top: 0.5rem;
         }
-        .dm-btn:hover:not(:disabled) {
-          background-size: 180% auto;
-          box-shadow: 0 6px 28px rgba(45,158,0,0.5), 0 1px 0 rgba(255,255,255,0.15) inset;
-          transform: translateY(-2px);
+        .login-submit:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 24px rgba(99,102,241,0.5);
         }
-        .dm-btn:active:not(:disabled) { transform: translateY(0); }
-        .dm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .login-submit:active:not(:disabled) { transform: translateY(0); }
+        .login-submit:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        .dm-footer {
+        .login-footer {
+          margin-top: 2rem;
           text-align: center;
-          margin-top: 1.5rem;
-          font-size: 0.7rem;
-          color: rgba(255,255,255,0.2);
+          font-size: 0.72rem;
+          color: #94a3b8;
           line-height: 1.6;
         }
-        .dm-footer strong { color: rgba(245,197,24,0.55); }
+
+        @media (max-width: 860px) {
+          .login-left { display: none; }
+          .login-right { width: 100%; }
+        }
       `}</style>
 
-      <div className="dm-login-wrap">
-        <div className="dm-orb dm-orb-1"/>
-        <div className="dm-orb dm-orb-2"/>
-        <div className="dm-orb dm-orb-3"/>
-        <div className="dm-gold-line"/>
+      <div className="login-root">
 
-        {/* Bolas flutuantes */}
-        {BALLS.map(b => <Ball key={b.id} {...b}/>)}
+        {/* ── Painel esquerdo ── */}
+        <div className="login-left">
 
-        <div className="dm-card">
-
-          {/* Banner Copa do Mundo 2026 */}
-          {!fechou && (
-            <div className="dm-banner">
-              <button className="dm-banner-close" onClick={() => setFechou(true)} title="Fechar">✕</button>
-              <span className="dm-trophy">🏆</span>
-              <p className="dm-banner-title">Copa do Mundo 2026</p>
-              <p className="dm-banner-quote">Brasil • Junho / Julho 2026</p>
-              <span className="dm-banner-flowers">⚽ 🇧🇷 🏆</span>
+          <div className="login-brand">
+            <div className="login-brand-icon">📋</div>
+            <div>
+              <div className="login-brand-name">Sistema Cartorial</div>
+              <div className="login-brand-sub">Gestão de Produtividade</div>
             </div>
-          )}
+          </div>
 
-          {/* Card do formulário */}
-          <div className={`dm-form-card${fechou ? ' solo' : ''}`}>
-            <div className="dm-logo-area">
-              <div style={{ width:'52px', height:'52px', borderRadius:'14px', background:'linear-gradient(135deg,#6366f1,#4f46e5)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.6rem', flexShrink:0 }}>📋</div>
-              <div>
-                <h1 className="dm-logo-title">Sistema de Gestão Cartorial</h1>
-                <p className="dm-logo-sub">Controle de Produtividade</p>
+          <div className="login-headline">
+            <h2>Controle total<br/>do seu <span>cartório</span></h2>
+            <p>Gerencie protocolos, prazos, produtividade da equipe e muito mais em uma única plataforma.</p>
+          </div>
+
+          <div className="login-stats">
+            {STATS.map(s => (
+              <div key={s.label} className="login-stat-card">
+                <div className="login-stat-icon">{s.icon}</div>
+                <div className="login-stat-value">{s.value}</div>
+                <div className="login-stat-label">{s.label}</div>
               </div>
+            ))}
+          </div>
+
+          <div className="login-chart-wrap">
+            <div className="login-chart-title">Protocolos por mês</div>
+            <div className="login-chart">
+              {BARS.map((b, i) => (
+                <div key={b.label} className="login-bar-wrap">
+                  <div
+                    className={`login-bar${i === 7 ? ' active' : ''}`}
+                    style={{ height: `${b.v}%`, opacity: 0.5 + (b.v / 200) }}
+                  />
+                  <span className="login-bar-lbl">{b.label}</span>
+                </div>
+              ))}
             </div>
+          </div>
 
-            <div className="dm-divider"/>
+        </div>
 
-            {erro && <div className="dm-alert">⚠️ {erro}</div>}
+        {/* ── Painel direito (formulário) ── */}
+        <div className="login-right">
+          <div className="login-form-wrap">
+
+            <div className="login-form-icon">📋</div>
+            <div className="login-form-title">Bem-vindo</div>
+            <div className="login-form-sub">Faça login para continuar</div>
+
+            {erro && (
+              <div className="login-alert">
+                ⚠️ {erro}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit}>
-              <label className="dm-label" htmlFor="email">E-mail</label>
-              <input
-                className="dm-input" type="email" id="email"
-                value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="seu@email.com" required autoFocus
-              />
-              <label className="dm-label" htmlFor="senha">Senha</label>
-              <input
-                className="dm-input" type="password" id="senha"
-                value={senha} onChange={e => setSenha(e.target.value)}
-                placeholder="••••••••" required
-              />
-              <button className="dm-btn" type="submit" disabled={carregando}>
-                {carregando ? 'Entrando...' : 'Entrar'}
+              <label className="login-field-label" htmlFor="email">E-mail</label>
+              <div className="login-field-wrap">
+                <input
+                  type="email" id="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  required autoFocus
+                />
+              </div>
+
+              <label className="login-field-label" htmlFor="senha">Senha</label>
+              <div className="login-field-wrap">
+                <input
+                  type="password" id="senha"
+                  value={senha}
+                  onChange={e => setSenha(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+
+              <button className="login-submit" type="submit" disabled={carregando}>
+                {carregando ? 'Entrando...' : 'Entrar →'}
               </button>
             </form>
 
-            <div className="dm-footer">
-              <strong>Versão 1.0</strong> · Sistema de Gestão Cartorial<br/>
+            <div className="login-footer">
+              <strong style={{ color: '#475569' }}>Versão 1.0</strong> · Sistema de Gestão Cartorial<br/>
               Desenvolvedor: Michael Oliveira
             </div>
           </div>
         </div>
+
       </div>
     </>
   );
