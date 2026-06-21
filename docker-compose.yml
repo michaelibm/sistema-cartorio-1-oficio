@@ -45,7 +45,7 @@ services:
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-465}
       SMTP_SECURE: ${SMTP_SECURE:-true}
-      SMTP_USER: ${SMTP_USER:-registros@1rimanaus.com.br}
+      SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
     dns:
       - 8.8.8.8
