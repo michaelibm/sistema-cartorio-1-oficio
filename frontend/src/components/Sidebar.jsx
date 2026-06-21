@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import logo from '../styles/img/logo.png';
+
 
 function Sidebar({ usuario, onLogout, onToggle }) {
   const location = useLocation();
@@ -101,28 +101,20 @@ function Sidebar({ usuario, onLogout, onToggle }) {
           marginBottom: '0.5rem',
           justifyContent: isCollapsed ? 'center' : 'flex-start'
         }}>
-          {/* Logo */}
+          {/* Ícone */}
           <div style={{
             width: isCollapsed ? '48px' : '52px',
             height: isCollapsed ? '48px' : '52px',
             borderRadius: '16px',
-            background: 'white',
+            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-            padding: '6px',
+            fontSize: isCollapsed ? '1.4rem' : '1.6rem',
+            flexShrink: 0,
             transition: 'all 0.3s ease'
           }}>
-            <img 
-              src={logo} 
-              alt="Logo Cartório" 
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain'
-              }}
-            />
+            📋
           </div>
           
           {!isCollapsed && (
