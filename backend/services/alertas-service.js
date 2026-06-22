@@ -1,20 +1,19 @@
 const pool = require('../config/database');
 
-// 🔔 WEBHOOK N8N (obrigatório no .env)
+// 🔔 WEBHOOK N8N (opcional)
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 
-if (!N8N_WEBHOOK_URL) {
-  console.error('❌ ERRO: N8N_WEBHOOK_URL não configurado no arquivo .env!');
-  console.error('   Adicione: N8N_WEBHOOK_URL=https://seu-n8n.com/webhook/protocolos-alerta');
-  throw new Error('N8N_WEBHOOK_URL não configurado');
+if (N8N_WEBHOOK_URL) {
+  console.log('✅ Webhook N8N configurado:', N8N_WEBHOOK_URL);
+} else {
+  console.log('ℹ️  N8N_WEBHOOK_URL não configurado — alertas via webhook desativados.');
 }
-
-console.log('✅ Webhook configurado:', N8N_WEBHOOK_URL);
 
 /**
  * Verifica protocolos vencendo considerando dias_alerta de cada serviço
  */
 async function verificarProtocolosVencendo() {
+  if (!N8N_WEBHOOK_URL) return { success: true, total: 0, enviados: 0, info: 'webhook não configurado' };
   try {
     console.log('[ALERTA] Verificando protocolos vencendo...');
 
@@ -156,6 +155,7 @@ async function enviarAlertaN8n(protocolo) {
  * Verifica protocolos JÁ VENCIDOS (atrasados)
  */
 async function verificarProtocolosAtrasados() {
+  if (!N8N_WEBHOOK_URL) return { success: true, total: 0, info: 'webhook não configurado' };
   try {
     const result = await pool.query(`
       SELECT 
