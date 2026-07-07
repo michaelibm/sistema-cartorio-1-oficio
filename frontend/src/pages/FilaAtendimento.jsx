@@ -17,10 +17,11 @@ export default function FilaAtendimento({ usuario }) {
   const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
+  const [reabrirInfo, setReabrirInfo] = useState(null);
+  const [reabrindo, setReabrindo] = useState(false);
   const [form, setForm] = useState({
     numero: "",
     servico_id: "",
-    nome_cliente: "",
     observacoes: "",
     prioridade: 2,
   });
@@ -73,7 +74,6 @@ export default function FilaAtendimento({ usuario }) {
           servico_id: Number(form.servico_id),
           responsavel_id: Number(usuario?.id),
           data_entrada: todayISO(),
-          nome_cliente: form.nome_cliente.trim() || null,
           observacoes: form.observacoes.trim() || null,
           prioridade: Number(form.prioridade),
           status: "aguardando",
@@ -87,7 +87,11 @@ export default function FilaAtendimento({ usuario }) {
         else if (data.code === "PROTOCOLO_EM_ANDAMENTO")
           setErro(`⚠️ Protocolo ${form.numero} já está em andamento com ${data.responsavel_nome}.`);
         else if (data.code === "PROTOCOLO_CONCLUIDO")
-          setErro(`⚠️ Protocolo ${form.numero} já foi concluído por ${data.responsavel_nome}.`);
+          setReabrirInfo({
+            protocolo_id: data.protocolo_id,
+            numero: form.numero,
+            responsavel_nome: data.responsavel_nome,
+          });
         else
           setErro(data.message || "Erro ao enviar protocolo.");
         return;
@@ -96,13 +100,44 @@ export default function FilaAtendimento({ usuario }) {
         await addNota(data.id, `[Atendimento] ${form.observacoes.trim()}`);
       }
       setSucesso(`✅ Protocolo ${form.numero} enviado para a fila!`);
-      setForm((f) => ({ numero: "", servico_id: f.servico_id, nome_cliente: "", observacoes: "", prioridade: 2 }));
+      setForm((f) => ({ numero: "", servico_id: f.servico_id, observacoes: "", prioridade: 2 }));
       carregar();
       setTimeout(() => setSucesso(""), 5000);
     } catch {
       setErro("Erro de conexão. Tente novamente.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const confirmarReabertura = async () => {
+    if (!reabrirInfo || !form.servico_id) return;
+    setReabrindo(true);
+    try {
+      const token = localStorage.getItem("token");
+      const resp = await fetch(`${API_URL}/protocolos/${reabrirInfo.protocolo_id}/reabrir`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ novo_servico_id: Number(form.servico_id), entrar_fila: true }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setErro(data.message || "Erro ao reabrir protocolo.");
+        setReabrirInfo(null);
+        return;
+      }
+      if (form.observacoes.trim()) {
+        await addNota(reabrirInfo.protocolo_id, `[Atendimento] ${form.observacoes.trim()}`);
+      }
+      setSucesso(`✅ Protocolo ${reabrirInfo.numero} reaberto e enviado para a fila de atendimento!`);
+      setReabrirInfo(null);
+      setForm((f) => ({ numero: "", servico_id: f.servico_id, observacoes: "", prioridade: 2 }));
+      carregar();
+      setTimeout(() => setSucesso(""), 5000);
+    } catch {
+      setErro("Erro de conexão. Tente novamente.");
+    } finally {
+      setReabrindo(false);
     }
   };
 
@@ -146,13 +181,6 @@ export default function FilaAtendimento({ usuario }) {
                 <option value="">Selecione o serviço...</option>
                 {servicos.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
               </select>
-            </div>
-
-            <div className="form-group">
-              <label>Nome do Cliente</label>
-              <input className="form-input" value={form.nome_cliente}
-                onChange={(e) => setForm({ ...form, nome_cliente: e.target.value })}
-                placeholder="Nome do solicitante" />
             </div>
 
             <div className="form-group">
@@ -231,7 +259,6 @@ export default function FilaAtendimento({ usuario }) {
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 15, color: "#1f2937" }}>#{p.numero}</div>
                         <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>{p.servico_nome}</div>
-                        {p.nome_cliente && <div style={{ fontSize: 13, color: "#374151", fontWeight: 500, marginTop: 2 }}>👤 {p.nome_cliente}</div>}
                         {p.observacoes && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4, fontStyle: "italic" }}>{p.observacoes}</div>}
                       </div>
                       <span style={{ padding: "0.2rem 0.6rem", borderRadius: 99, background: cfg.bg, color: cfg.cor, fontSize: 11, fontWeight: 700 }}>
@@ -248,6 +275,40 @@ export default function FilaAtendimento({ usuario }) {
           )}
         </div>
       </div>
+
+      {/* ===== Modal: protocolo já concluído - deseja reabrir? ===== */}
+      {reabrirInfo && (
+        <div className="modal-overlay" onClick={() => setReabrirInfo(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div style={{ textAlign: "center", marginBottom: "1rem" }}>
+              <span style={{ fontSize: "3rem" }}>✅</span>
+            </div>
+            <h2 style={{ textAlign: "center", color: "#1e293b", marginBottom: "0.5rem" }}>Protocolo já concluído</h2>
+            <p style={{ textAlign: "center", color: "#64748b", marginBottom: "1.5rem", fontSize: 14 }}>
+              O protocolo <strong>#{reabrirInfo.numero}</strong> já foi concluído por{" "}
+              <strong>{reabrirInfo.responsavel_nome}</strong>.
+              <br />Deseja reabrir o protocolo?
+            </p>
+            <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 8, padding: "0.75rem 1rem", marginBottom: "1.5rem", fontSize: 13, color: "#92400e" }}>
+              ⚠️ Ao reabrir, o protocolo volta para a fila do setor de atendimento aguardando um registrador. A produtividade de <strong>{reabrirInfo.responsavel_nome}</strong> será mantida no histórico.
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setReabrirInfo(null)} disabled={reabrindo}>
+                Não
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={confirmarReabertura}
+                disabled={reabrindo}
+                style={{ background: "#10b981" }}
+              >
+                {reabrindo ? "Reabrindo..." : "✔ Sim, reabrir protocolo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

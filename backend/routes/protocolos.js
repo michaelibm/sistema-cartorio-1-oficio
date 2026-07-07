@@ -1075,7 +1075,7 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
 router.post('/:id/reabrir', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { novo_responsavel_id, novo_servico_id } = req.body;
+    const { novo_responsavel_id, novo_servico_id, entrar_fila } = req.body;
 
     if (!novo_servico_id) {
       return res.status(400).json({ message: 'Selecione o novo serviço para reabrir o protocolo.' });
@@ -1093,8 +1093,13 @@ router.post('/:id/reabrir', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Protocolo não está concluído' });
     }
 
+    // Reabertura pelo Balcão de Atendimento: volta para a fila (setor de atendimento)
+    // em vez de ser atribuído diretamente a um registrador.
+    const novoStatus = entrar_fila ? 'aguardando' : 'andamento';
+    const idResponsavelFinal = entrar_fila ? req.user.id : novo_responsavel_id;
+
     const responsavelAnterior = await pool.query('SELECT nome FROM usuarios WHERE id = $1', [p.responsavel_id]);
-    const novoResp = await pool.query('SELECT nome FROM usuarios WHERE id = $1 AND ativo = true', [novo_responsavel_id]);
+    const novoResp = await pool.query('SELECT nome FROM usuarios WHERE id = $1 AND ativo = true', [idResponsavelFinal]);
     if (!novoResp.rows.length) {
       return res.status(404).json({ message: 'Responsável não encontrado' });
     }
@@ -1110,23 +1115,26 @@ router.post('/:id/reabrir', authMiddleware, async (req, res) => {
 
     await pool.query(
       `UPDATE protocolos
-       SET status = 'andamento',
-           responsavel_id = $1,
-           servico_id = $2,
-           data_entrada = $3,
-           data_vencimento = $4,
+       SET status = $1,
+           responsavel_id = $2,
+           servico_id = $3,
+           data_entrada = $4,
+           data_vencimento = $5,
            data_conclusao = NULL,
            updated_at = NOW()
-       WHERE id = $5`,
-      [novo_responsavel_id, novo_servico_id, hoje, novaDataVencimento, id]
+       WHERE id = $6`,
+      [novoStatus, idResponsavelFinal, novo_servico_id, hoje, novaDataVencimento, id]
     );
 
     const nomeAnterior = responsavelAnterior.rows[0]?.nome || 'Desconhecido';
     const nomeNovo = novoResp.rows[0]?.nome || 'Desconhecido';
+    const descricao = entrar_fila
+      ? `Protocolo reaberto por ${nomeNovo} e reenviado à fila de atendimento com serviço "${s.nome}". Conclusão anterior por ${nomeAnterior} mantida no histórico.`
+      : `Protocolo reaberto por ${nomeNovo} com serviço "${s.nome}". Novo vencimento: ${novaDataVencimento}. Conclusão anterior por ${nomeAnterior} mantida no histórico.`;
     await pool.query(
       `INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at)
        VALUES ($1, $2, 'reabertura', $3, NOW())`,
-      [id, req.user.id, `Protocolo reaberto por ${nomeNovo} com serviço "${s.nome}". Novo vencimento: ${novaDataVencimento}. Conclusão anterior por ${nomeAnterior} mantida no histórico.`]
+      [id, req.user.id, descricao]
     );
 
     res.json({ message: 'Protocolo reaberto com sucesso' });
