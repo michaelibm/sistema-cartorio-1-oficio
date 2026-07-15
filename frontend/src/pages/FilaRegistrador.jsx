@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { API_URL } from "../services/api";
+import { API_URL, getServicos } from "../services/api";
 import "./Protocolos.css";
 
 const PRIORIDADE_CONFIG = {
@@ -17,6 +17,8 @@ export default function FilaRegistrador({ usuario }) {
   const [sucesso, setSucesso] = useState("");
   const [modalConfirm, setModalConfirm] = useState(null);
   const [busca, setBusca] = useState("");
+  const [servicos, setServicos] = useState([]);
+  const [servicoEscolhido, setServicoEscolhido] = useState("");
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -46,6 +48,10 @@ export default function FilaRegistrador({ usuario }) {
     return () => clearInterval(interval);
   }, [carregar]);
 
+  useEffect(() => {
+    getServicos().then((res) => setServicos(Array.isArray(res) ? res : [])).catch(() => {});
+  }, []);
+
   const toggleSelecionado = (id) => {
     setSelecionados((prev) => {
       const novo = new Set(prev);
@@ -54,12 +60,16 @@ export default function FilaRegistrador({ usuario }) {
     });
   };
 
-  const puxarUm = async (protocoloId) => {
+  const puxarUm = async (protocoloId, servicoId) => {
     const token = localStorage.getItem("token");
     const resp = await fetch(`${API_URL}/protocolos/${protocoloId}/transferir`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ novo_responsavel_id: usuario?.id, puxar_fila: true }),
+      body: JSON.stringify({
+        novo_responsavel_id: usuario?.id,
+        puxar_fila: true,
+        ...(servicoId ? { servico_id: Number(servicoId) } : {}),
+      }),
     });
     return resp.ok;
   };
@@ -82,8 +92,9 @@ export default function FilaRegistrador({ usuario }) {
   const iniciarUm = async (p) => {
     setIniciando(true);
     setErro(""); setSucesso("");
-    const ok = await puxarUm(p.id);
+    const ok = await puxarUm(p.id, servicoEscolhido);
     setModalConfirm(null);
+    setServicoEscolhido("");
     await carregar();
     if (ok) {
       setSucesso(`✅ Protocolo #${p.numero} iniciado! Acesse Protocolos para trabalhar.`);
@@ -182,7 +193,7 @@ export default function FilaRegistrador({ usuario }) {
                 {oficiais.map((p) => (
                   <CardProtocolo key={p.id} p={p} selecionado={selecionados.has(p.id)}
                     onToggle={() => toggleSelecionado(p.id)}
-                    onPuxar={() => setModalConfirm(p)} />
+                    onPuxar={() => { setServicoEscolhido(""); setModalConfirm(p); }} />
                 ))}
               </div>
             </div>
@@ -199,7 +210,7 @@ export default function FilaRegistrador({ usuario }) {
                 {demais.map((p) => (
                   <CardProtocolo key={p.id} p={p} selecionado={selecionados.has(p.id)}
                     onToggle={() => toggleSelecionado(p.id)}
-                    onPuxar={() => setModalConfirm(p)} />
+                    onPuxar={() => { setServicoEscolhido(""); setModalConfirm(p); }} />
                 ))}
               </div>
             </div>
@@ -222,11 +233,28 @@ export default function FilaRegistrador({ usuario }) {
                 Todos vão para <strong>Em andamento</strong> na sua lista.
               </p>
             ) : (
-              <p style={{ textAlign: "center", color: "#64748b", fontSize: 14, marginBottom: "1.25rem" }}>
-                Protocolo <strong>#{modalConfirm.numero}</strong>
-                {modalConfirm.nome_cliente && <> — <strong>{modalConfirm.nome_cliente}</strong></>}
-                <br />Vai para <strong>Em andamento</strong> na sua lista.
-              </p>
+              <>
+                <p style={{ textAlign: "center", color: "#64748b", fontSize: 14, marginBottom: "1.25rem" }}>
+                  Protocolo <strong>#{modalConfirm.numero}</strong>
+                  {modalConfirm.nome_cliente && <> — <strong>{modalConfirm.nome_cliente}</strong></>}
+                  <br />Vai para <strong>Em andamento</strong> na sua lista.
+                </p>
+
+                <div className="form-group">
+                  <label htmlFor="servico-puxar">Serviço que você irá realizar *</label>
+                  <select
+                    id="servico-puxar"
+                    className="form-select"
+                    value={servicoEscolhido}
+                    onChange={(e) => setServicoEscolhido(e.target.value)}
+                  >
+                    <option value="">Selecione o serviço...</option>
+                    {servicos.map((s) => (
+                      <option key={s.id} value={s.id}>{s.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
 
             <div style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 8, padding: "0.75rem 1rem", marginBottom: "1.5rem", fontSize: 13, color: "#1e40af" }}>
@@ -238,7 +266,7 @@ export default function FilaRegistrador({ usuario }) {
               <button className="btn btn-primary"
                 style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
                 onClick={modalConfirm === "multi" ? iniciarSelecionados : () => iniciarUm(modalConfirm)}
-                disabled={iniciando}>
+                disabled={iniciando || (modalConfirm !== "multi" && !servicoEscolhido)}>
                 {iniciando ? "⏳ Iniciando..." : "▶ Confirmar e Iniciar"}
               </button>
             </div>

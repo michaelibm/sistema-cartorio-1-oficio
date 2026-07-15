@@ -1036,14 +1036,14 @@ router.get('/dashboard/stats', authMiddleware, async (req, res) => {
 router.post('/:id/transferir', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { novo_responsavel_id } = req.body;
+    const { novo_responsavel_id, servico_id } = req.body;
 
     if (!novo_responsavel_id) {
       return res.status(400).json({ message: 'Novo responsável é obrigatório' });
     }
 
     const protocolo = await pool.query(
-      'SELECT id, numero, responsavel_id, status FROM protocolos WHERE id = $1',
+      'SELECT id, numero, responsavel_id, status, data_entrada FROM protocolos WHERE id = $1',
       [id]
     );
     if (!protocolo.rows.length) {
@@ -1060,17 +1060,42 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Novo responsável não encontrado' });
     }
 
-    await pool.query(
-      'UPDATE protocolos SET responsavel_id = $1, status = CASE WHEN status = \'aguardando\' THEN \'andamento\' ELSE status END, updated_at = NOW() WHERE id = $2',
-      [novo_responsavel_id, id]
-    );
+    // Ao puxar da fila, o registrador pode definir o serviço real que irá executar
+    // (o serviço escolhido pelo atendimento costuma ser só uma categoria de triagem).
+    let servicoNome = null;
+    if (servico_id) {
+      const servicoResult = await pool.query('SELECT id, nome, prazo, tipo_prazo FROM servicos WHERE id = $1', [servico_id]);
+      if (!servicoResult.rows.length) {
+        return res.status(404).json({ message: 'Serviço não encontrado' });
+      }
+      const s = servicoResult.rows[0];
+      servicoNome = s.nome;
+      const novaDataVencimento = await calcularDataVencimento(protocolo.rows[0].data_entrada, s.prazo, s.tipo_prazo);
+
+      await pool.query(
+        `UPDATE protocolos
+         SET responsavel_id = $1, servico_id = $2, data_vencimento = $3,
+             status = CASE WHEN status = 'aguardando' THEN 'andamento' ELSE status END,
+             updated_at = NOW()
+         WHERE id = $4`,
+        [novo_responsavel_id, servico_id, novaDataVencimento, id]
+      );
+    } else {
+      await pool.query(
+        'UPDATE protocolos SET responsavel_id = $1, status = CASE WHEN status = \'aguardando\' THEN \'andamento\' ELSE status END, updated_at = NOW() WHERE id = $2',
+        [novo_responsavel_id, id]
+      );
+    }
 
     const nomeAtual = responsavelAtual.rows[0]?.nome || 'Desconhecido';
     const nomeNovo = novoResponsavel.rows[0]?.nome || 'Desconhecido';
+    const descricao = servicoNome
+      ? `Protocolo transferido de ${nomeAtual} para ${nomeNovo}, serviço definido como "${servicoNome}"`
+      : `Protocolo transferido de ${nomeAtual} para ${nomeNovo}`;
     await pool.query(
       `INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at)
        VALUES ($1, $2, 'transferencia', $3, NOW())`,
-      [id, req.user.id, `Protocolo transferido de ${nomeAtual} para ${nomeNovo}`]
+      [id, req.user.id, descricao]
     );
 
     res.json({ message: 'Protocolo transferido com sucesso' });
