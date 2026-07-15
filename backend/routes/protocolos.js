@@ -410,9 +410,9 @@ router.post('/', authMiddleware, async (req, res) => {
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { responsavel_id, observacoes, status, tem_orcamento, orcamento_valor, orcamento_pago, prioridade, servico_id, data_entrada } = req.body;
+    const { numero, responsavel_id, observacoes, status, tem_orcamento, orcamento_valor, orcamento_pago, prioridade, servico_id, data_entrada } = req.body;
 
-    if (req.user.cargo === 'Registrador') {
+    if (req.user.cargo === 'Registrador' || req.user.cargo === 'Atendente') {
       const checkProtocolo = await pool.query('SELECT responsavel_id FROM protocolos WHERE id = $1', [id]);
 
       if (checkProtocolo.rows.length === 0) {
@@ -432,6 +432,16 @@ router.put('/:id', authMiddleware, async (req, res) => {
     const params = [];
     let paramCount = 1;
     const updates = [];
+
+    if (numero !== undefined) {
+      const duplicado = await pool.query('SELECT id FROM protocolos WHERE numero = $1 AND id != $2', [numero, id]);
+      if (duplicado.rows.length > 0) {
+        return res.status(409).json({ message: `Já existe outro protocolo com o número ${numero}.` });
+      }
+      updates.push(`numero = $${paramCount}`);
+      params.push(numero);
+      paramCount++;
+    }
 
     if (servico_id !== undefined || data_entrada !== undefined) {
       const atual = await pool.query('SELECT servico_id, data_entrada FROM protocolos WHERE id = $1', [id]);
@@ -667,7 +677,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
     const p = pRes.rows[0];
 
-    if (req.user.cargo === 'Registrador' && p.responsavel_id != req.user.id) {
+    if ((req.user.cargo === 'Registrador' || req.user.cargo === 'Atendente') && p.responsavel_id != req.user.id) {
       return res.status(403).json({ message: 'Você só pode cancelar seus próprios protocolos' });
     }
 

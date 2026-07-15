@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { API_URL, getServicos, addNota } from "../services/api";
+import { API_URL, getServicos, addNota, updateProtocolo, deleteProtocolo } from "../services/api";
 import "./Protocolos.css";
 
 const PRIORIDADE_CONFIG = {
@@ -19,6 +19,10 @@ export default function FilaAtendimento({ usuario }) {
   const [sucesso, setSucesso] = useState("");
   const [reabrirInfo, setReabrirInfo] = useState(null);
   const [reabrindo, setReabrindo] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [editForm, setEditForm] = useState({ numero: "", servico_id: "", prioridade: 2, observacoes: "" });
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [excluindoId, setExcluindoId] = useState(null);
   const [form, setForm] = useState({
     numero: "",
     servico_id: "",
@@ -138,6 +142,60 @@ export default function FilaAtendimento({ usuario }) {
       setErro("Erro de conexão. Tente novamente.");
     } finally {
       setReabrindo(false);
+    }
+  };
+
+  const abrirEdicao = (p) => {
+    setErro(""); setSucesso("");
+    setEditando(p);
+    setEditForm({
+      numero: String(p.numero || ""),
+      servico_id: String(p.servico_id || ""),
+      prioridade: p.prioridade || 2,
+      observacoes: p.observacoes || "",
+    });
+  };
+
+  const salvarEdicao = async (e) => {
+    e.preventDefault();
+    if (!editando) return;
+    if (!editForm.numero.trim() || !editForm.servico_id) {
+      setErro("Preencha o número do protocolo e o serviço.");
+      return;
+    }
+    setSalvandoEdicao(true);
+    setErro("");
+    try {
+      await updateProtocolo(editando.id, {
+        numero: editForm.numero.trim(),
+        servico_id: Number(editForm.servico_id),
+        prioridade: Number(editForm.prioridade),
+        observacoes: editForm.observacoes.trim() || null,
+      });
+      setEditando(null);
+      setSucesso(`✅ Protocolo ${editForm.numero} atualizado!`);
+      await carregar();
+      setTimeout(() => setSucesso(""), 5000);
+    } catch (e2) {
+      setErro(e2?.message || "Erro ao salvar alterações.");
+    } finally {
+      setSalvandoEdicao(false);
+    }
+  };
+
+  const excluir = async (p) => {
+    if (!window.confirm(`Excluir o protocolo #${p.numero} da fila? Essa ação não pode ser desfeita.`)) return;
+    setErro(""); setSucesso("");
+    setExcluindoId(p.id);
+    try {
+      await deleteProtocolo(p.id);
+      setSucesso(`✅ Protocolo ${p.numero} removido da fila.`);
+      await carregar();
+      setTimeout(() => setSucesso(""), 5000);
+    } catch (e2) {
+      setErro(e2?.message || "Erro ao excluir protocolo.");
+    } finally {
+      setExcluindoId(null);
     }
   };
 
@@ -265,8 +323,20 @@ export default function FilaAtendimento({ usuario }) {
                         {cfg.emoji} {cfg.label}
                       </span>
                     </div>
-                    <div style={{ fontSize: 11, color: "#cbd5e1", marginTop: 6 }}>
-                      Enviado em {String(p.data_entrada).slice(0, 10)}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+                      <div style={{ fontSize: 11, color: "#cbd5e1" }}>
+                        Enviado em {String(p.data_entrada).slice(0, 10)}
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button type="button" onClick={() => abrirEdicao(p)}
+                          style={{ fontSize: 12, color: "#2563eb", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                          ✏️ Editar
+                        </button>
+                        <button type="button" onClick={() => excluir(p)} disabled={excluindoId === p.id}
+                          style={{ fontSize: 12, color: "#dc2626", background: "none", border: "none", cursor: excluindoId === p.id ? "not-allowed" : "pointer", fontWeight: 600 }}>
+                          {excluindoId === p.id ? "Excluindo..." : "🗑️ Excluir"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -306,6 +376,71 @@ export default function FilaAtendimento({ usuario }) {
                 {reabrindo ? "Reabrindo..." : "✔ Sim, reabrir protocolo"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal: editar protocolo enviado ===== */}
+      {editando && (
+        <div className="modal-overlay" onClick={() => setEditando(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <h2 style={{ marginBottom: "1rem" }}>✏️ Editar Protocolo</h2>
+
+            <form onSubmit={salvarEdicao}>
+              <div className="form-group">
+                <label>Número do Protocolo *</label>
+                <input className="form-input" value={editForm.numero}
+                  onChange={(e) => setEditForm({ ...editForm, numero: e.target.value })}
+                  autoFocus style={{ fontSize: "1.1rem", fontWeight: 600 }} />
+              </div>
+
+              <div className="form-group">
+                <label>Serviço *</label>
+                <select className="form-select" value={editForm.servico_id}
+                  onChange={(e) => setEditForm({ ...editForm, servico_id: e.target.value })}>
+                  <option value="">Selecione o serviço...</option>
+                  {servicos.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Prioridade</label>
+                <div style={{ display: "flex", gap: "0.75rem" }}>
+                  {[1, 2, 3].map((nivel) => {
+                    const cfg = PRIORIDADE_CONFIG[nivel];
+                    const ativo = Number(editForm.prioridade) === nivel;
+                    return (
+                      <button key={nivel} type="button" onClick={() => setEditForm({ ...editForm, prioridade: nivel })}
+                        style={{
+                          flex: 1, padding: "0.7rem", borderRadius: 10,
+                          border: ativo ? `2px solid ${cfg.cor}` : "2px solid #e5e7eb",
+                          background: ativo ? cfg.bg : "white", color: ativo ? cfg.cor : "#6b7280",
+                          fontWeight: ativo ? 700 : 500, fontSize: 13, cursor: "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                        }}>
+                        {cfg.emoji} {cfg.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Observações para o Registrador</label>
+                <textarea className="form-input" rows="2" value={editForm.observacoes}
+                  onChange={(e) => setEditForm({ ...editForm, observacoes: e.target.value })}
+                  placeholder="Informações importantes..." />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setEditando(null)} disabled={salvandoEdicao}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={salvandoEdicao}>
+                  {salvandoEdicao ? "Salvando..." : "Salvar alterações"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
