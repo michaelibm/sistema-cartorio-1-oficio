@@ -650,7 +650,7 @@ export default function Protocolos({ usuario }) {
       const token = localStorage.getItem("token");
       const [p, s, f, st] = await Promise.all([
         getProtocolos({
-          status: fStatus || undefined,
+          status: fStatus === "__vencido__" ? "andamento" : (fStatus || undefined),
           responsavel_id: fResp || undefined,
         }),
         getServicos(),
@@ -846,9 +846,18 @@ export default function Protocolos({ usuario }) {
   };
 
   const filtrados = useMemo(() => {
+    let base = itens;
+    if (fStatus === "__vencido__") {
+      const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+      base = base.filter((p) => {
+        if (!p.data_vencimento) return false;
+        const venc = new Date(p.data_vencimento); venc.setHours(0, 0, 0, 0);
+        return venc < hoje;
+      });
+    }
     const s = q.trim().toLowerCase();
-    if (!s) return itens;
-    return itens.filter(
+    if (!s) return base;
+    return base.filter(
       (p) =>
         String(p.numero || "")
           .toLowerCase()
@@ -863,7 +872,7 @@ export default function Protocolos({ usuario }) {
           .toLowerCase()
           .includes(s)
     );
-  }, [itens, q]);
+  }, [itens, q, fStatus]);
 
   const abrirNovo = () => {
     setEditId(null);
@@ -1286,6 +1295,7 @@ export default function Protocolos({ usuario }) {
               onChange={(e) => setFStatus(e.target.value)}
             >
               <option value="">Todos status</option>
+              <option value="__vencido__">⚠️ Vencidos</option>
               {statusList.map((s) => (
                 <option key={s.nome} value={s.nome}>
                   {s.nome}
