@@ -387,7 +387,7 @@ function Login({ onLogin }) {
           <div className="login-form-wrap">
 
             <div className="login-form-icon">📋</div>
-            <div className="login-form-title">Bem-vindo</div>
+            <div className="login-form-title">Bem-vindo Aguia 5.0</div>
             <div className="login-form-sub">Faça login para continuar</div>
 
             {erro && (
