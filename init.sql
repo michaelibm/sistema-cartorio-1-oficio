@@ -156,7 +156,8 @@ CREATE TABLE IF NOT EXISTS public.usuarios
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     setor character varying(100) COLLATE pg_catalog."default",
     CONSTRAINT usuarios_pkey PRIMARY KEY (id),
-    CONSTRAINT usuarios_email_key UNIQUE (email)
+    CONSTRAINT usuarios_email_key UNIQUE (email),
+    CONSTRAINT usuarios_cargo_check CHECK (cargo IN ('Supervisor', 'Coordenador', 'Registrador', 'Atendente'))
 );
 
 COMMENT ON COLUMN public.usuarios.setor
