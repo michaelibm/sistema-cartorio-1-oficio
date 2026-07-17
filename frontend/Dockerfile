@@ -14,12 +14,6 @@ COPY . .
 ARG REACT_APP_API_URL
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
-# Nome exibido na Sidebar/Login/Painel desta instalação (branding por cliente)
-ARG REACT_APP_ORG_NAME
-ENV REACT_APP_ORG_NAME=$REACT_APP_ORG_NAME
-ARG REACT_APP_ORG_SUBTITLE
-ENV REACT_APP_ORG_SUBTITLE=$REACT_APP_ORG_SUBTITLE
-
 RUN npm run build
 
 # Stage 2: Serve com nginx

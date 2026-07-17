@@ -233,7 +233,7 @@ router.post('/:id/enviar-email', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Destinatário, assunto e corpo são obrigatórios.' });
 
     await transporter.sendMail({
-      from:    `"${process.env.EMAIL_FROM_NAME || 'Cartório'}" <${process.env.SMTP_USER}>`,
+      from:    `"Cartório" <${process.env.SMTP_USER}>`,
       to:      destinatario,
       subject: assunto,
       text:    corpo,
