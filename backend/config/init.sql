@@ -11,7 +11,7 @@ CREATE TABLE usuarios (
     nome VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     senha VARCHAR(255) NOT NULL,
-    cargo VARCHAR(50) NOT NULL CHECK (cargo IN ('Supervisor', 'Escrevente', 'Auxiliar')),
+    cargo VARCHAR(50) NOT NULL CHECK (cargo IN ('Supervisor', 'Coordenador', 'Registrador', 'Atendente')),
     ativo BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

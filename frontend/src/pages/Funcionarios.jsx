@@ -13,10 +13,18 @@ function Funcionarios() {
   const [form, setForm] = useState({
     nome: '',
     email: '',
-    cargo: 'Escrevente',
+    cargo: 'Coordenador',
     setor: '',
     senha: '',
   });
+
+  // Normaliza valores antigos gravados no banco (Auxiliar/Escrevente) para os
+  // nomes de cargo atuais, usados nas checagens de permissão do sistema.
+  const normalizarCargo = (cargo) => {
+    if (cargo === 'Auxiliar') return 'Registrador';
+    if (cargo === 'Escrevente') return 'Coordenador';
+    return cargo || 'Coordenador';
+  };
 
   const carregar = async () => {
     setLoading(true);
@@ -37,18 +45,18 @@ function Funcionarios() {
 
   const abrirNovo = () => {
     setEditId(null);
-    setForm({ nome: '', email: '', cargo: 'Escrevente', setor: '', senha: '' });
+    setForm({ nome: '', email: '', cargo: 'Coordenador', setor: '', senha: '' });
     setModalOpen(true);
   };
 
   const abrirEdicao = (u) => {
     setEditId(u.id);
-    setForm({ 
-      nome: u.nome || '', 
-      email: u.email || '', 
-      cargo: u.cargo || 'Escrevente', 
+    setForm({
+      nome: u.nome || '',
+      email: u.email || '',
+      cargo: normalizarCargo(u.cargo),
       setor: u.setor || '',
-      senha: '' 
+      senha: ''
     });
     setModalOpen(true);
   };
@@ -151,13 +159,11 @@ function Funcionarios() {
                     <td>{u.email}</td>
                     <td>
                       <span className={`status-badge ${
-                        u.cargo === 'Supervisor' ? 'info' : 
-                        u.cargo === 'Auxiliar' ? 'success' : 
-                        u.cargo === 'Escrevente' ? 'warning' : 'info'
+                        u.cargo === 'Supervisor' ? 'info' :
+                        normalizarCargo(u.cargo) === 'Registrador' ? 'success' :
+                        normalizarCargo(u.cargo) === 'Coordenador' ? 'warning' : 'info'
                       }`}>
-                        {u.cargo === 'Auxiliar' ? 'Registrador' : 
-                         u.cargo === 'Escrevente' ? 'Coordenador' : 
-                         u.cargo}
+                        {normalizarCargo(u.cargo)}
                       </span>
                     </td>
                     <td>{u.setor || '-'}</td>
@@ -220,8 +226,8 @@ function Funcionarios() {
                   onChange={(e) => setForm((f) => ({ ...f, cargo: e.target.value }))}
                 >
                   <option value="Supervisor">Supervisor</option>
-                  <option value="Escrevente">Coordenador</option>
-                  <option value="Auxiliar">Registrador</option>
+                  <option value="Coordenador">Coordenador</option>
+                  <option value="Registrador">Registrador</option>
                   <option value="Atendente">Atendente</option>
                 </select>
               </div>
