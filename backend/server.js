@@ -29,6 +29,8 @@ const usucapiaoRoutes = require('./routes/usucapiao');
 // ✅ PAINEL PÚBLICO (sem autenticação)
 const painelRoutes = require('./routes/painel');
 
+const configuracoesRoutes = require('./routes/configuracoes');
+
 app.use('/api/auth', authRoutes);
 app.use('/api/protocolos', protocoloRoutes);
 app.use('/api/servicos', servicoRoutes);
@@ -45,6 +47,8 @@ app.use('/api/usucapiao', usucapiaoRoutes);
 
 // ✅ REGISTRAR PAINEL PÚBLICO
 app.use('/api/painel', painelRoutes);
+
+app.use('/api/configuracoes', configuracoesRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

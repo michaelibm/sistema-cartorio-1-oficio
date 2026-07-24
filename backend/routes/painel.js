@@ -2,9 +2,25 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
 
-// Rota pública - sem autenticação
+// Rota consumida pela TV interna do cartório e pelo painel-corregedoria (hub externo).
+// Não usa o JWT normal (são clientes sem login) - exige uma chave fixa via header.
 router.get('/dados', async (req, res) => {
   try {
+    // Aceita a chave fixa do .env (usada pela TV interna, configurada no deploy)
+    // e/ou a chave gerada pela tela de Configurações (usada pelo painel-corregedoria).
+    let apiKeyBanco = null;
+    try {
+      const cfg = await pool.query("SELECT valor FROM configuracoes WHERE chave = 'painel_api_key'");
+      apiKeyBanco = cfg.rows[0]?.valor || null;
+    } catch (e) {
+      // Tabela "configuracoes" pode não existir ainda em bancos não migrados - ignora.
+    }
+
+    const chavesValidas = [process.env.PAINEL_API_KEY, apiKeyBanco].filter(Boolean);
+    if (chavesValidas.length > 0 && !chavesValidas.includes(req.header('X-API-Key'))) {
+      return res.status(401).json({ message: 'API key inválida ou ausente' });
+    }
+
     const hoje = new Date().toISOString().slice(0, 10);
     const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
 

@@ -17,6 +17,13 @@ CREATE TABLE usuarios (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Tabela de configurações (chave/valor)
+CREATE TABLE configuracoes (
+    chave VARCHAR(100) PRIMARY KEY,
+    valor TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Tabela de tipos de serviço
 CREATE TABLE servicos (
     id SERIAL PRIMARY KEY,

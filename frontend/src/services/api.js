@@ -251,6 +251,22 @@ export const deleteFuncionario = async (id) => {
   return handleResponse(response);
 };
 
+// CONFIGURAÇÕES
+export const getPainelApiKey = async () => {
+  const response = await fetch(`${API_URL}/configuracoes/painel-api-key`, {
+    headers: getAuthHeader(),
+  });
+  return handleResponse(response);
+};
+
+export const gerarPainelApiKey = async () => {
+  const response = await fetch(`${API_URL}/configuracoes/painel-api-key/gerar`, {
+    method: 'POST',
+    headers: getAuthHeader(),
+  });
+  return handleResponse(response);
+};
+
 // FERIADOS
 export const getFeriados = async () => {
   const response = await fetch(`${API_URL}/feriados`, {

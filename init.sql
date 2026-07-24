@@ -8,6 +8,14 @@ BEGIN;
 -- TABELAS
 -- ============================================================
 
+CREATE TABLE IF NOT EXISTS public.configuracoes
+(
+    chave character varying(100) COLLATE pg_catalog."default" NOT NULL,
+    valor text COLLATE pg_catalog."default",
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT configuracoes_pkey PRIMARY KEY (chave)
+);
+
 CREATE TABLE IF NOT EXISTS public.feriados
 (
     id serial NOT NULL,

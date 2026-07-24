@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getFeriados, createFeriado, deleteFeriado } from '../services/api';
+import { getFeriados, createFeriado, deleteFeriado, getPainelApiKey, gerarPainelApiKey } from '../services/api';
 import { API_URL } from "../services/api";
 
 
@@ -27,24 +27,55 @@ function Configuracoes() {
   const [erro, setErro] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // ===== PAINEL EXTERNO (CORREGEDORIA) =====
+  const [painelApiKey, setPainelApiKey] = useState(null);
+  const [mostrarChave, setMostrarChave] = useState(false);
+  const [gerandoChave, setGerandoChave] = useState(false);
+
   const carregarDados = async () => {
     setLoading(true);
     setErro('');
     try {
-      const [feriadosData, statusData] = await Promise.all([
+      const [feriadosData, statusData, chaveData] = await Promise.all([
         getFeriados(),
         fetch(`${API_URL}/status`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }).then(r => r.json())
+        }).then(r => r.json()),
+        getPainelApiKey(),
       ]);
-      
+
       setFeriados(Array.isArray(feriadosData) ? feriadosData : []);
       setStatusList(Array.isArray(statusData) ? statusData : []);
+      setPainelApiKey(chaveData?.valor || null);
     } catch (e) {
       setErro(e?.message || 'Erro ao carregar configurações');
     } finally {
       setLoading(false);
     }
+  };
+
+  const gerarChave = async () => {
+    if (painelApiKey && !window.confirm('Gerar uma nova chave? A chave atual deixa de funcionar imediatamente — se o painel-corregedoria já estiver usando a chave antiga, ele vai perder acesso até você atualizar lá também.')) {
+      return;
+    }
+    setGerandoChave(true);
+    setErro('');
+    try {
+      const resp = await gerarPainelApiKey();
+      setPainelApiKey(resp.valor);
+      setMostrarChave(true);
+    } catch (e) {
+      setErro(e?.message || 'Erro ao gerar chave');
+    } finally {
+      setGerandoChave(false);
+    }
+  };
+
+  const copiarChave = async () => {
+    if (!painelApiKey) return;
+    try {
+      await navigator.clipboard.writeText(painelApiKey);
+    } catch (e) { /* clipboard indisponível - ignora */ }
   };
 
   useEffect(() => {
@@ -228,6 +259,44 @@ function Configuracoes() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== PAINEL EXTERNO (CORREGEDORIA) ===== */}
+      <div className="card" style={{ marginBottom: '2rem' }}>
+        <div className="card-header">
+          <div className="card-title">🔑 Painel Externo (Corregedoria)</div>
+        </div>
+
+        <div style={{ padding: '1.5rem' }}>
+          <p style={{ color: '#64748b', fontSize: 14, marginBottom: '1rem' }}>
+            Chave usada por sistemas externos (como o painel-corregedoria) para consultar os
+            dados do painel deste cartório. Gere uma chave e cadastre o mesmo valor no sistema
+            da corregedoria.
+          </p>
+
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type={mostrarChave ? 'text' : 'password'}
+              className="form-input"
+              readOnly
+              value={painelApiKey || 'Nenhuma chave gerada ainda'}
+              style={{ flex: 1, minWidth: 260, fontFamily: 'monospace' }}
+            />
+            {painelApiKey && (
+              <>
+                <button type="button" className="btn btn-secondary" onClick={() => setMostrarChave((v) => !v)}>
+                  {mostrarChave ? 'Ocultar' : 'Mostrar'}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={copiarChave}>
+                  Copiar
+                </button>
+              </>
+            )}
+            <button type="button" className="btn btn-primary" onClick={gerarChave} disabled={gerandoChave}>
+              {gerandoChave ? 'Gerando...' : painelApiKey ? 'Gerar nova chave' : 'Gerar chave'}
+            </button>
           </div>
         </div>
       </div>

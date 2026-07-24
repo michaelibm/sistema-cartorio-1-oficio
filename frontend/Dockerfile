@@ -14,6 +14,10 @@ COPY . .
 ARG REACT_APP_API_URL
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
+# Chave que a tela de painel/TV envia para /api/painel/dados (mesma do PAINEL_API_KEY do backend)
+ARG REACT_APP_PAINEL_API_KEY
+ENV REACT_APP_PAINEL_API_KEY=$REACT_APP_PAINEL_API_KEY
+
 RUN npm run build
 
 # Stage 2: Serve com nginx

@@ -176,7 +176,11 @@ export default function Painel() {
 
   const carregar = useCallback(async () => {
     try {
-      const resp = await fetch(`${API_BASE}/painel/dados`);
+      const resp = await fetch(`${API_BASE}/painel/dados`, {
+        headers: process.env.REACT_APP_PAINEL_API_KEY
+          ? { 'X-API-Key': process.env.REACT_APP_PAINEL_API_KEY }
+          : {},
+      });
       if (!resp.ok) throw new Error('Erro');
       const data = await resp.json();
       setDados(data);
