@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { API_URL, getServicos } from "../services/api";
+import { API_URL, getServicos, getFuncionarios } from "../services/api";
 import "./Protocolos.css";
 
 const PRIORIDADE_CONFIG = {
@@ -19,6 +19,12 @@ export default function FilaRegistrador({ usuario }) {
   const [busca, setBusca] = useState("");
   const [servicos, setServicos] = useState([]);
   const [servicoEscolhido, setServicoEscolhido] = useState("");
+  const [registradores, setRegistradores] = useState([]);
+  const [modalDistribuir, setModalDistribuir] = useState(false);
+  const [registradorEscolhido, setRegistradorEscolhido] = useState("");
+  const [distribuindo, setDistribuindo] = useState(false);
+
+  const podeDistribuir = usuario?.cargo === "Supervisor";
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -52,6 +58,14 @@ export default function FilaRegistrador({ usuario }) {
     getServicos().then((res) => setServicos(Array.isArray(res) ? res : [])).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!podeDistribuir) return;
+    getFuncionarios()
+      .then((res) => setRegistradores(Array.isArray(res) ? res.filter((f) => f.cargo === "Registrador" && f.ativo) : []))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [podeDistribuir]);
+
   const toggleSelecionado = (id) => {
     setSelecionados((prev) => {
       const novo = new Set(prev);
@@ -60,13 +74,13 @@ export default function FilaRegistrador({ usuario }) {
     });
   };
 
-  const puxarUm = async (protocoloId, servicoId) => {
+  const puxarUm = async (protocoloId, servicoId, responsavelId) => {
     const token = localStorage.getItem("token");
     const resp = await fetch(`${API_URL}/protocolos/${protocoloId}/transferir`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        novo_responsavel_id: usuario?.id,
+        novo_responsavel_id: responsavelId || usuario?.id,
         puxar_fila: true,
         ...(servicoId ? { servico_id: Number(servicoId) } : {}),
       }),
@@ -87,6 +101,24 @@ export default function FilaRegistrador({ usuario }) {
     setSucesso(`✅ ${ok} protocolo(s) iniciado(s)! Acesse Protocolos para trabalhar.`);
     setTimeout(() => setSucesso(""), 7000);
     setIniciando(false);
+  };
+
+  const distribuirSelecionados = async () => {
+    if (!registradorEscolhido) return;
+    setDistribuindo(true);
+    setErro(""); setSucesso("");
+    let ok = 0;
+    for (const id of selecionados) {
+      if (await puxarUm(id, null, registradorEscolhido)) ok++;
+    }
+    const nomeRegistrador = registradores.find((r) => String(r.id) === String(registradorEscolhido))?.nome || "registrador";
+    setSelecionados(new Set());
+    setModalDistribuir(false);
+    setRegistradorEscolhido("");
+    await carregar();
+    setSucesso(`✅ ${ok} protocolo(s) distribuído(s) para ${nomeRegistrador}.`);
+    setTimeout(() => setSucesso(""), 7000);
+    setDistribuindo(false);
   };
 
   const iniciarUm = async (p) => {
@@ -161,6 +193,13 @@ export default function FilaRegistrador({ usuario }) {
           <button className="btn btn-secondary" onClick={carregar} disabled={loading}>
             🔄 Atualizar
           </button>
+          {selecionados.size > 0 && podeDistribuir && (
+            <button className="btn btn-secondary"
+              style={{ background: "linear-gradient(135deg, #6366f1, #4f46e5)", color: "white" }}
+              onClick={() => setModalDistribuir(true)} disabled={distribuindo}>
+              📤 Distribuir {selecionados.size} protocolo(s)
+            </button>
+          )}
           {selecionados.size > 0 && (
             <button className="btn btn-primary"
               style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
@@ -268,6 +307,49 @@ export default function FilaRegistrador({ usuario }) {
                 onClick={modalConfirm === "multi" ? iniciarSelecionados : () => iniciarUm(modalConfirm)}
                 disabled={iniciando || (modalConfirm !== "multi" && !servicoEscolhido)}>
                 {iniciando ? "⏳ Iniciando..." : "▶ Confirmar e Iniciar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Distribuir (Supervisor) */}
+      {modalDistribuir && (
+        <div className="modal-overlay" onClick={() => setModalDistribuir(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div style={{ textAlign: "center", marginBottom: "1rem" }}>
+              <span style={{ fontSize: "3rem" }}>📤</span>
+            </div>
+            <h2 style={{ textAlign: "center", marginBottom: "0.5rem" }}>Distribuir Protocolos</h2>
+            <p style={{ textAlign: "center", color: "#64748b", fontSize: 14, marginBottom: "1.25rem" }}>
+              Você vai distribuir <strong>{selecionados.size} protocolo(s)</strong> selecionado(s)
+              para um registrador. Todos vão para <strong>Em andamento</strong> na lista dele.
+            </p>
+
+            <div className="form-group">
+              <label htmlFor="registrador-distribuir">Registrador *</label>
+              <select
+                id="registrador-distribuir"
+                className="form-select"
+                value={registradorEscolhido}
+                onChange={(e) => setRegistradorEscolhido(e.target.value)}
+              >
+                <option value="">Selecione o registrador...</option>
+                {registradores.map((r) => (
+                  <option key={r.id} value={r.id}>{r.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setModalDistribuir(false)} disabled={distribuindo}>
+                Cancelar
+              </button>
+              <button className="btn btn-primary"
+                style={{ background: "linear-gradient(135deg, #6366f1, #4f46e5)" }}
+                onClick={distribuirSelecionados}
+                disabled={distribuindo || !registradorEscolhido}>
+                {distribuindo ? "⏳ Distribuindo..." : "📤 Confirmar Distribuição"}
               </button>
             </div>
           </div>
