@@ -22,6 +22,7 @@ export default function FilaRegistrador({ usuario }) {
   const [registradores, setRegistradores] = useState([]);
   const [modalDistribuir, setModalDistribuir] = useState(false);
   const [registradorEscolhido, setRegistradorEscolhido] = useState("");
+  const [servicoDistribuir, setServicoDistribuir] = useState("");
   const [distribuindo, setDistribuindo] = useState(false);
 
   const podeDistribuir = usuario?.cargo === "Supervisor";
@@ -104,17 +105,18 @@ export default function FilaRegistrador({ usuario }) {
   };
 
   const distribuirSelecionados = async () => {
-    if (!registradorEscolhido) return;
+    if (!registradorEscolhido || !servicoDistribuir) return;
     setDistribuindo(true);
     setErro(""); setSucesso("");
     let ok = 0;
     for (const id of selecionados) {
-      if (await puxarUm(id, null, registradorEscolhido)) ok++;
+      if (await puxarUm(id, servicoDistribuir, registradorEscolhido)) ok++;
     }
     const nomeRegistrador = registradores.find((r) => String(r.id) === String(registradorEscolhido))?.nome || "registrador";
     setSelecionados(new Set());
     setModalDistribuir(false);
     setRegistradorEscolhido("");
+    setServicoDistribuir("");
     await carregar();
     setSucesso(`✅ ${ok} protocolo(s) distribuído(s) para ${nomeRegistrador}.`);
     setTimeout(() => setSucesso(""), 7000);
@@ -196,7 +198,7 @@ export default function FilaRegistrador({ usuario }) {
           {selecionados.size > 0 && podeDistribuir && (
             <button className="btn btn-secondary"
               style={{ background: "linear-gradient(135deg, #6366f1, #4f46e5)", color: "white" }}
-              onClick={() => setModalDistribuir(true)} disabled={distribuindo}>
+              onClick={() => { setRegistradorEscolhido(""); setServicoDistribuir(""); setModalDistribuir(true); }} disabled={distribuindo}>
               📤 Distribuir {selecionados.size} protocolo(s)
             </button>
           )}
@@ -341,6 +343,24 @@ export default function FilaRegistrador({ usuario }) {
               </select>
             </div>
 
+            <div className="form-group">
+              <label htmlFor="servico-distribuir">Serviço *</label>
+              <select
+                id="servico-distribuir"
+                className="form-select"
+                value={servicoDistribuir}
+                onChange={(e) => setServicoDistribuir(e.target.value)}
+              >
+                <option value="">Selecione o serviço...</option>
+                {servicos.map((s) => (
+                  <option key={s.id} value={s.id}>{s.nome}</option>
+                ))}
+              </select>
+              <small style={{ display: "block", marginTop: "0.25rem", color: "#666" }}>
+                Esse serviço será aplicado a todos os protocolos selecionados.
+              </small>
+            </div>
+
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setModalDistribuir(false)} disabled={distribuindo}>
                 Cancelar
@@ -348,7 +368,7 @@ export default function FilaRegistrador({ usuario }) {
               <button className="btn btn-primary"
                 style={{ background: "linear-gradient(135deg, #6366f1, #4f46e5)" }}
                 onClick={distribuirSelecionados}
-                disabled={distribuindo || !registradorEscolhido}>
+                disabled={distribuindo || !registradorEscolhido || !servicoDistribuir}>
                 {distribuindo ? "⏳ Distribuindo..." : "📤 Confirmar Distribuição"}
               </button>
             </div>
