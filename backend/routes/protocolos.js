@@ -479,6 +479,18 @@ router.put('/:id', authMiddleware, async (req, res) => {
       updates.push(`responsavel_id = $${paramCount}`);
       params.push(responsavel_id);
       paramCount++;
+
+      // Reatribuir o responsável de um protocolo que ainda está "aguardando" na
+      // fila já o coloca "em andamento" com o novo responsável (mesma regra do
+      // /transferir), a menos que a requisição já esteja definindo um status.
+      if (status === undefined) {
+        const atualStatus = await pool.query('SELECT status FROM protocolos WHERE id = $1', [id]);
+        if (atualStatus.rows[0]?.status === 'aguardando') {
+          updates.push(`status = $${paramCount}`);
+          params.push('andamento');
+          paramCount++;
+        }
+      }
     }
 
     if (observacoes !== undefined) {
