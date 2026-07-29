@@ -113,10 +113,11 @@ export const addServicoAoProtocolo = async (protocoloId, { servico_id, renovarPr
   return handleResponse(response);
 };
 
-export const devolverProtocolo = async (id) => {
+export const devolverProtocolo = async (id, novoResponsavelId) => {
   const response = await fetch(`${API_URL}/protocolos/${id}/devolver`, {
     method: 'POST',
-    headers: getAuthHeader(),
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ novo_responsavel_id: novoResponsavelId }),
   });
   return handleResponse(response);
 };

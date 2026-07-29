@@ -1141,13 +1141,17 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
   }
 });
 
-// Registrador devolve o protocolo para a coordenação sinalizar
+// Registrador devolve o protocolo para um supervisor/coordenador
 router.post('/:id/devolver', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
+    const { novo_responsavel_id } = req.body;
 
     if (req.user.cargo !== 'Registrador') {
       return res.status(403).json({ message: 'Apenas registradores podem devolver protocolos para a coordenação' });
+    }
+    if (!novo_responsavel_id) {
+      return res.status(400).json({ message: 'Selecione para quem devolver o protocolo.' });
     }
 
     const protocolo = await pool.query('SELECT id, numero, responsavel_id, status FROM protocolos WHERE id = $1', [id]);
@@ -1163,17 +1167,25 @@ router.post('/:id/devolver', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Só é possível devolver protocolos em andamento ou concluídos' });
     }
 
+    const destino = await pool.query(
+      "SELECT id, nome FROM usuarios WHERE id = $1 AND ativo = true AND cargo IN ('Supervisor', 'Coordenador')",
+      [novo_responsavel_id]
+    );
+    if (!destino.rows.length) {
+      return res.status(404).json({ message: 'Selecione um supervisor ou coordenador válido.' });
+    }
+
     await pool.query(
-      'UPDATE protocolos SET devolvido_por_id = $1, devolvido_em = NOW(), updated_at = NOW() WHERE id = $2',
-      [req.user.id, id]
+      'UPDATE protocolos SET responsavel_id = $1, devolvido_por_id = $2, devolvido_em = NOW(), updated_at = NOW() WHERE id = $3',
+      [novo_responsavel_id, req.user.id, id]
     );
 
     await pool.query(
       'INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at) VALUES ($1, $2, $3, $4, NOW())',
-      [id, req.user.id, 'devolucao', `Protocolo ${p.numero} devolvido para a coordenação por ${req.user.nome || req.user.email}`]
+      [id, req.user.id, 'devolucao', `Protocolo ${p.numero} devolvido por ${req.user.nome || req.user.email} para ${destino.rows[0].nome}`]
     );
 
-    res.json({ message: 'Protocolo devolvido para a coordenação' });
+    res.json({ message: 'Protocolo devolvido com sucesso' });
   } catch (error) {
     console.error('Erro ao devolver protocolo:', error);
     res.status(500).json({ message: 'Erro ao devolver protocolo' });

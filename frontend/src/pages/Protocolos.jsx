@@ -574,6 +574,12 @@ export default function Protocolos({ usuario }) {
   const [transfResponsavel, setTransfResponsavel] = useState("");
   const [transfSaving, setTransfSaving] = useState(false);
 
+  // Devolver para coordenação
+  const [modalDevolverOpen, setModalDevolverOpen] = useState(false);
+  const [devolverProtocoloSel, setDevolverProtocoloSel] = useState(null);
+  const [devolverResponsavel, setDevolverResponsavel] = useState("");
+  const [devolverSaving, setDevolverSaving] = useState(false);
+
   // Conflito de protocolo existente
   const [modalConflitoOpen, setModalConflitoOpen] = useState(false);
   const [conflitoInfo, setConflitoInfo] = useState(null); // { code, message, protocolo_id, responsavel_nome, status }
@@ -652,7 +658,9 @@ export default function Protocolos({ usuario }) {
       const token = localStorage.getItem("token");
       const [p, s, f, st] = await Promise.all([
         getProtocolos({
-          status: fStatus === "__vencido__" ? "andamento" : (fStatus || undefined),
+          status: fStatus === "__vencido__" ? "andamento"
+            : fStatus === "__devolvido__" ? undefined
+            : (fStatus || undefined),
           responsavel_id: fResp || undefined,
         }),
         getServicos(),
@@ -856,10 +864,11 @@ export default function Protocolos({ usuario }) {
         const venc = new Date(p.data_vencimento); venc.setHours(0, 0, 0, 0);
         return venc < hoje;
       });
+    } else if (fStatus === "__devolvido__") {
+      base = base.filter((p) => !!p.devolvido_por_id);
     }
     const s = q.trim().toLowerCase();
-    if (!s) return base;
-    return base.filter(
+    const filtradosPorBusca = !s ? base : base.filter(
       (p) =>
         String(p.numero || "")
           .toLowerCase()
@@ -874,6 +883,8 @@ export default function Protocolos({ usuario }) {
           .toLowerCase()
           .includes(s)
     );
+    // Protocolos devolvidos para a coordenação sempre aparecem primeiro na lista.
+    return [...filtradosPorBusca].sort((a, b) => (b.devolvido_por_id ? 1 : 0) - (a.devolvido_por_id ? 1 : 0));
   }, [itens, q, fStatus]);
 
   const abrirNovo = () => {
@@ -1018,14 +1029,30 @@ export default function Protocolos({ usuario }) {
     }
   };
 
-  const devolver = async (id) => {
-    if (!window.confirm("Devolver este protocolo para a coordenação?\n\nEle continua com você, mas fica sinalizado (linha laranja) para a coordenação saber que precisa de atenção.")) return;
+  const abrirDevolver = (p) => {
+    setDevolverProtocoloSel(p);
+    setDevolverResponsavel("");
+    setModalDevolverOpen(true);
+  };
+
+  const fecharDevolver = () => {
+    setModalDevolverOpen(false);
+    setDevolverProtocoloSel(null);
+    setDevolverResponsavel("");
+  };
+
+  const confirmarDevolver = async () => {
+    if (!devolverResponsavel || !devolverProtocoloSel) return;
+    setDevolverSaving(true);
     setErro("");
     try {
-      await devolverProtocolo(id);
+      await devolverProtocolo(devolverProtocoloSel.id, devolverResponsavel);
+      fecharDevolver();
       await carregar();
     } catch (e) {
       setErro(e?.message || "Erro ao devolver protocolo");
+    } finally {
+      setDevolverSaving(false);
     }
   };
 
@@ -1309,6 +1336,7 @@ export default function Protocolos({ usuario }) {
             >
               <option value="">Todos status</option>
               <option value="__vencido__">⚠️ Vencidos</option>
+              <option value="__devolvido__">↩️ Transferidos</option>
               {statusList.map((s) => (
                 <option key={s.nome} value={s.nome}>
                   {s.nome}
@@ -1587,7 +1615,7 @@ export default function Protocolos({ usuario }) {
                           <button
                             className="btn-action"
                             style={{ background: "#ffedd5", color: "#c2410c" }}
-                            onClick={() => devolver(p.id)}
+                            onClick={() => abrirDevolver(p)}
                             title="Devolver para a coordenação"
                           >
                             ↩
@@ -2532,6 +2560,52 @@ export default function Protocolos({ usuario }) {
                 style={{ background: '#7c3aed' }}
               >
                 {transfSaving ? "Transferindo..." : "✔ Confirmar Transferência"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal Devolver para coordenação ===== */}
+      {modalDevolverOpen && devolverProtocoloSel && (
+        <div className="modal-overlay" onClick={fecharDevolver}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <h2>↩ Devolver Protocolo</h2>
+            <p style={{ color: '#64748b', marginBottom: '1.25rem', fontSize: 14 }}>
+              Protocolo <strong>{devolverProtocoloSel.numero}</strong> será transferido para quem você escolher,
+              sinalizado como devolvido por <strong>{usuario?.nome}</strong>.
+            </p>
+
+            <div className="form-group">
+              <label className="form-label">Devolver para</label>
+              <select
+                className="form-select"
+                value={devolverResponsavel}
+                onChange={(e) => setDevolverResponsavel(e.target.value)}
+              >
+                <option value="">Selecione...</option>
+                {funcionarios
+                  .filter((f) => f.cargo === "Supervisor" || f.cargo === "Coordenador")
+                  .map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.nome} ({f.cargo})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={fecharDevolver}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={confirmarDevolver}
+                disabled={!devolverResponsavel || devolverSaving}
+                style={{ background: '#f97316' }}
+              >
+                {devolverSaving ? "Devolvendo..." : "↩ Confirmar Devolução"}
               </button>
             </div>
           </div>
