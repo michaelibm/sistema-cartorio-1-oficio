@@ -98,8 +98,8 @@ const prazoServicoLabel = (s) => {
 };
 
 const corLinha = (p) => {
-  if (["concluido","concluído","cancelado","concluido_parcial"].includes((p.status||"").toLowerCase())) return {};
   if (p.devolvido_por_id) return { background: "#fff7ed", borderLeft: "4px solid #f97316" };
+  if (["concluido","concluído","cancelado","concluido_parcial"].includes((p.status||"").toLowerCase())) return {};
   if (!p.data_vencimento) return {};
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const venc = new Date(p.data_vencimento); venc.setHours(0, 0, 0, 0);
@@ -1581,7 +1581,8 @@ export default function Protocolos({ usuario }) {
                             💰
                           </button>
                         )}
-                        {usuario?.cargo === "Registrador" && p.status === "andamento" &&
+                        {usuario?.cargo === "Registrador" &&
+                          ["andamento", "concluido", "concluido_parcial"].includes(p.status) &&
                           Number(p.responsavel_id) === Number(usuario?.id) && !p.devolvido_por_id && (
                           <button
                             className="btn-action"

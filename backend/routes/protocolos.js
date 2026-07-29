@@ -1159,8 +1159,8 @@ router.post('/:id/devolver', authMiddleware, async (req, res) => {
     if (p.responsavel_id != req.user.id) {
       return res.status(403).json({ message: 'Você só pode devolver seus próprios protocolos' });
     }
-    if (p.status !== 'andamento') {
-      return res.status(400).json({ message: 'Só é possível devolver protocolos em andamento' });
+    if (!['andamento', 'concluido', 'concluido_parcial'].includes(p.status)) {
+      return res.status(400).json({ message: 'Só é possível devolver protocolos em andamento ou concluídos' });
     }
 
     await pool.query(
