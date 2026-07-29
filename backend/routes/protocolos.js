@@ -41,10 +41,12 @@ router.get('/', authMiddleware, async (req, res) => {
 
     let query = `
       SELECT p.*, s.nome as servico_nome, s.prazo, s.tipo_prazo,
-             u.nome as responsavel_nome, u.cargo as responsavel_cargo, u.setor as responsavel_setor
+             u.nome as responsavel_nome, u.cargo as responsavel_cargo, u.setor as responsavel_setor,
+             d.nome as devolvido_por_nome
       FROM protocolos p
       JOIN servicos s ON p.servico_id = s.id
       JOIN usuarios u ON p.responsavel_id = u.id
+      LEFT JOIN usuarios d ON p.devolvido_por_id = d.id
       WHERE 1=1
     `;
 
@@ -274,10 +276,12 @@ router.get('/:id', authMiddleware, async (req, res) => {
     let query = `
       SELECT p.*, s.nome as servico_nome, s.prazo, s.tipo_prazo,
              u.nome as responsavel_nome, u.email as responsavel_email,
-             u.cargo as responsavel_cargo, u.setor as responsavel_setor
+             u.cargo as responsavel_cargo, u.setor as responsavel_setor,
+             d.nome as devolvido_por_nome
       FROM protocolos p
       JOIN servicos s ON p.servico_id = s.id
       JOIN usuarios u ON p.responsavel_id = u.id
+      LEFT JOIN usuarios d ON p.devolvido_por_id = d.id
       WHERE p.id = $1
     `;
 
@@ -479,6 +483,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
       updates.push(`responsavel_id = $${paramCount}`);
       params.push(responsavel_id);
       paramCount++;
+
+      // Reatribuir limpa o sinalizador de "devolvido para coordenação",
+      // já que alguém assumiu o protocolo de novo.
+      updates.push(`devolvido_por_id = NULL`, `devolvido_em = NULL`);
 
       // Reatribuir o responsável de um protocolo que ainda está "aguardando" na
       // fila já o coloca "em andamento" com o novo responsável (mesma regra do
@@ -1098,13 +1106,19 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
         `UPDATE protocolos
          SET responsavel_id = $1, servico_id = $2, data_vencimento = $3,
              status = CASE WHEN status = 'aguardando' THEN 'andamento' ELSE status END,
+             devolvido_por_id = NULL, devolvido_em = NULL,
              updated_at = NOW()
          WHERE id = $4`,
         [novo_responsavel_id, servico_id, novaDataVencimento, id]
       );
     } else {
       await pool.query(
-        'UPDATE protocolos SET responsavel_id = $1, status = CASE WHEN status = \'aguardando\' THEN \'andamento\' ELSE status END, updated_at = NOW() WHERE id = $2',
+        `UPDATE protocolos
+         SET responsavel_id = $1,
+             status = CASE WHEN status = 'aguardando' THEN 'andamento' ELSE status END,
+             devolvido_por_id = NULL, devolvido_em = NULL,
+             updated_at = NOW()
+         WHERE id = $2`,
         [novo_responsavel_id, id]
       );
     }
@@ -1124,6 +1138,45 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Erro ao transferir protocolo:', error);
     res.status(500).json({ message: 'Erro ao transferir protocolo' });
+  }
+});
+
+// Registrador devolve o protocolo para a coordenação sinalizar
+router.post('/:id/devolver', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (req.user.cargo !== 'Registrador') {
+      return res.status(403).json({ message: 'Apenas registradores podem devolver protocolos para a coordenação' });
+    }
+
+    const protocolo = await pool.query('SELECT id, numero, responsavel_id, status FROM protocolos WHERE id = $1', [id]);
+    if (!protocolo.rows.length) {
+      return res.status(404).json({ message: 'Protocolo não encontrado' });
+    }
+    const p = protocolo.rows[0];
+
+    if (p.responsavel_id != req.user.id) {
+      return res.status(403).json({ message: 'Você só pode devolver seus próprios protocolos' });
+    }
+    if (p.status !== 'andamento') {
+      return res.status(400).json({ message: 'Só é possível devolver protocolos em andamento' });
+    }
+
+    await pool.query(
+      'UPDATE protocolos SET devolvido_por_id = $1, devolvido_em = NOW(), updated_at = NOW() WHERE id = $2',
+      [req.user.id, id]
+    );
+
+    await pool.query(
+      'INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at) VALUES ($1, $2, $3, $4, NOW())',
+      [id, req.user.id, 'devolucao', `Protocolo ${p.numero} devolvido para a coordenação por ${req.user.nome || req.user.email}`]
+    );
+
+    res.json({ message: 'Protocolo devolvido para a coordenação' });
+  } catch (error) {
+    console.error('Erro ao devolver protocolo:', error);
+    res.status(500).json({ message: 'Erro ao devolver protocolo' });
   }
 });
 

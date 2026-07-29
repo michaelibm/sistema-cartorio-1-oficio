@@ -48,7 +48,9 @@ CREATE TABLE protocolos (
     status VARCHAR(20) DEFAULT 'andamento' CHECK (status IN ('andamento', 'concluido', 'cancelado')),
     observacoes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    devolvido_por_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    devolvido_em TIMESTAMP
 );
 
 -- Tabela de feriados

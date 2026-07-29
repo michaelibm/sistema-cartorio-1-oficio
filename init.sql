@@ -103,6 +103,8 @@ CREATE TABLE IF NOT EXISTS public.protocolos
     nome_cliente character varying(255) COLLATE pg_catalog."default",
     iniciado_em timestamp without time zone,
     pausado_em timestamp without time zone,
+    devolvido_por_id integer,
+    devolvido_em timestamp without time zone,
     CONSTRAINT protocolos_pkey PRIMARY KEY (id),
     CONSTRAINT protocolos_numero_key UNIQUE (numero)
 );
@@ -243,6 +245,12 @@ ALTER TABLE IF EXISTS public.protocolos
     REFERENCES public.servicos (id) MATCH SIMPLE
     ON UPDATE NO ACTION
     ON DELETE RESTRICT;
+
+ALTER TABLE IF EXISTS public.protocolos
+    ADD CONSTRAINT protocolos_devolvido_por_id_fkey FOREIGN KEY (devolvido_por_id)
+    REFERENCES public.usuarios (id) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE SET NULL;
 
 -- ============================================================
 -- TRIGGERS PARA UPDATED_AT

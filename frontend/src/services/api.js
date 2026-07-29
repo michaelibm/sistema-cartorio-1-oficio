@@ -113,6 +113,14 @@ export const addServicoAoProtocolo = async (protocoloId, { servico_id, renovarPr
   return handleResponse(response);
 };
 
+export const devolverProtocolo = async (id) => {
+  const response = await fetch(`${API_URL}/protocolos/${id}/devolver`, {
+    method: 'POST',
+    headers: getAuthHeader(),
+  });
+  return handleResponse(response);
+};
+
 export const concluirProtocolo = async (id) => {
   const response = await fetch(`${API_URL}/protocolos/${id}/concluir`, {
     method: 'PATCH',

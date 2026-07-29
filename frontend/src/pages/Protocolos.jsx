@@ -8,6 +8,7 @@ import {
   concluirParcialProtocolo,
   createProtocolo,
   deleteProtocolo,
+  devolverProtocolo,
   getFuncionarios,
   getProtocolos,
   getServicos,
@@ -98,6 +99,7 @@ const prazoServicoLabel = (s) => {
 
 const corLinha = (p) => {
   if (["concluido","concluído","cancelado","concluido_parcial"].includes((p.status||"").toLowerCase())) return {};
+  if (p.devolvido_por_id) return { background: "#fff7ed", borderLeft: "4px solid #f97316" };
   if (!p.data_vencimento) return {};
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const venc = new Date(p.data_vencimento); venc.setHours(0, 0, 0, 0);
@@ -1016,6 +1018,17 @@ export default function Protocolos({ usuario }) {
     }
   };
 
+  const devolver = async (id) => {
+    if (!window.confirm("Devolver este protocolo para a coordenação?\n\nEle continua com você, mas fica sinalizado (linha laranja) para a coordenação saber que precisa de atenção.")) return;
+    setErro("");
+    try {
+      await devolverProtocolo(id);
+      await carregar();
+    } catch (e) {
+      setErro(e?.message || "Erro ao devolver protocolo");
+    }
+  };
+
   const excluir = async (id) => {
     if (
       !window.confirm("Excluir este protocolo? (será marcado como cancelado)")
@@ -1429,7 +1442,17 @@ export default function Protocolos({ usuario }) {
                         );
                       })()}
                     </td>
-                    <td>{p.servico_nome}</td>
+                    <td>
+                      {p.servico_nome}
+                      {p.devolvido_por_id && (
+                        <div
+                          style={{ marginTop: 3, fontSize: 11, fontWeight: 700, color: "#c2410c" }}
+                          title={p.devolvido_em ? `Devolvido em ${String(p.devolvido_em).slice(0, 10)}` : undefined}
+                        >
+                          ↩ Devolvido por {p.devolvido_por_nome}
+                        </div>
+                      )}
+                    </td>
                     <td>{p.responsavel_setor || "-"}</td>
                     <td>{p.responsavel_nome}</td>
                     <td>{String(p.data_entrada).slice(0, 10)}</td>
@@ -1556,6 +1579,17 @@ export default function Protocolos({ usuario }) {
                             title="Editar orçamento e prioridade"
                           >
                             💰
+                          </button>
+                        )}
+                        {usuario?.cargo === "Registrador" && p.status === "andamento" &&
+                          Number(p.responsavel_id) === Number(usuario?.id) && !p.devolvido_por_id && (
+                          <button
+                            className="btn-action"
+                            style={{ background: "#ffedd5", color: "#c2410c" }}
+                            onClick={() => devolver(p.id)}
+                            title="Devolver para a coordenação"
+                          >
+                            ↩
                           </button>
                         )}
                         <button
