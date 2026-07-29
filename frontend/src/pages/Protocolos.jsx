@@ -1868,11 +1868,11 @@ export default function Protocolos({ usuario }) {
                       setForm({ ...form, status: e.target.value })
                     }
                   >
-                    {statusList.map((s) => (
-                      <option key={s.nome} value={s.nome}>
-                        {s.nome}
-                      </option>
-                    ))}
+                    <option value="aguardando">Aguardando</option>
+                    <option value="andamento">Em andamento</option>
+                    <option value="concluido">Concluído</option>
+                    <option value="concluido_parcial">Concluído parcialmente</option>
+                    <option value="cancelado">Cancelado</option>
                   </select>
                 </div>
               )}

@@ -508,6 +508,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
     }
 
     if (status) {
+      const statusValidos = ['aguardando', 'andamento', 'concluido', 'concluido_parcial', 'cancelado'];
+      if (!statusValidos.includes(status)) {
+        return res.status(400).json({ message: `Status inválido: "${status}". Use um de: ${statusValidos.join(', ')}.` });
+      }
       updates.push(`status = $${paramCount}`);
       params.push(status);
       paramCount++;
