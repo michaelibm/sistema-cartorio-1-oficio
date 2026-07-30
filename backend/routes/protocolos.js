@@ -479,7 +479,25 @@ router.put('/:id', authMiddleware, async (req, res) => {
       paramCount++;
     }
 
+    // statusFinal começa como o status enviado pelo cliente (pode ser undefined,
+    // já que o modal de editar sempre envia o status atual, mesmo quando só o
+    // responsável mudou - não dá pra confiar em "status === undefined" sozinho).
+    let statusFinal = status;
+
     if (responsavel_id) {
+      const atualResp = await pool.query('SELECT status, responsavel_id FROM protocolos WHERE id = $1', [id]);
+      const statusAtual = atualResp.rows[0]?.status;
+      const responsavelMudou = Number(atualResp.rows[0]?.responsavel_id) !== Number(responsavel_id);
+      const statusNaoFoiAlteradoPeloUsuario = status === undefined || status === statusAtual;
+
+      // Reatribuir o responsável de um protocolo que ainda está "aguardando" na
+      // fila já o coloca "em andamento" com o novo responsável (mesma regra do
+      // /transferir) - a menos que o usuário tenha explicitamente escolhido
+      // outro status na mesma edição.
+      if (responsavelMudou && statusNaoFoiAlteradoPeloUsuario && statusAtual === 'aguardando') {
+        statusFinal = 'andamento';
+      }
+
       updates.push(`responsavel_id = $${paramCount}`);
       params.push(responsavel_id);
       paramCount++;
@@ -487,18 +505,6 @@ router.put('/:id', authMiddleware, async (req, res) => {
       // Reatribuir limpa o sinalizador de "devolvido para coordenação",
       // já que alguém assumiu o protocolo de novo.
       updates.push(`devolvido_por_id = NULL`, `devolvido_em = NULL`);
-
-      // Reatribuir o responsável de um protocolo que ainda está "aguardando" na
-      // fila já o coloca "em andamento" com o novo responsável (mesma regra do
-      // /transferir), a menos que a requisição já esteja definindo um status.
-      if (status === undefined) {
-        const atualStatus = await pool.query('SELECT status FROM protocolos WHERE id = $1', [id]);
-        if (atualStatus.rows[0]?.status === 'aguardando') {
-          updates.push(`status = $${paramCount}`);
-          params.push('andamento');
-          paramCount++;
-        }
-      }
     }
 
     if (observacoes !== undefined) {
@@ -507,16 +513,16 @@ router.put('/:id', authMiddleware, async (req, res) => {
       paramCount++;
     }
 
-    if (status) {
+    if (statusFinal) {
       const statusValidos = ['aguardando', 'andamento', 'concluido', 'concluido_parcial', 'cancelado'];
-      if (!statusValidos.includes(status)) {
-        return res.status(400).json({ message: `Status inválido: "${status}". Use um de: ${statusValidos.join(', ')}.` });
+      if (!statusValidos.includes(statusFinal)) {
+        return res.status(400).json({ message: `Status inválido: "${statusFinal}". Use um de: ${statusValidos.join(', ')}.` });
       }
       updates.push(`status = $${paramCount}`);
-      params.push(status);
+      params.push(statusFinal);
       paramCount++;
 
-      if (status === 'concluido') {
+      if (statusFinal === 'concluido') {
         updates.push(`data_conclusao = CURRENT_DATE`);
       }
     }
