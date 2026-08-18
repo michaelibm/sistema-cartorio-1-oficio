@@ -1089,9 +1089,12 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
     if (!protocolo.rows.length) {
       return res.status(404).json({ message: 'Protocolo não encontrado' });
     }
-    if (protocolo.rows[0].status !== 'andamento' && protocolo.rows[0].status !== 'aguardando') {
-      return res.status(400).json({ message: 'Só é possível transferir protocolos em andamento ou aguardando' });
+    const statusAtual = protocolo.rows[0].status;
+    const statusPermitidos = ['andamento', 'aguardando', 'concluido', 'concluido_parcial'];
+    if (!statusPermitidos.includes(statusAtual)) {
+      return res.status(400).json({ message: 'Só é possível transferir protocolos em andamento, aguardando ou concluídos' });
     }
+    const reabrindo = statusAtual === 'concluido' || statusAtual === 'concluido_parcial';
 
     const responsavelAtual = await pool.query('SELECT nome FROM usuarios WHERE id = $1', [protocolo.rows[0].responsavel_id]);
     const novoResponsavel = await pool.query('SELECT nome, setor FROM usuarios WHERE id = $1 AND ativo = true', [novo_responsavel_id]);
@@ -1115,7 +1118,8 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
       await pool.query(
         `UPDATE protocolos
          SET responsavel_id = $1, servico_id = $2, data_vencimento = $3,
-             status = CASE WHEN status = 'aguardando' THEN 'andamento' ELSE status END,
+             status = CASE WHEN status IN ('aguardando', 'concluido', 'concluido_parcial') THEN 'andamento' ELSE status END,
+             data_conclusao = CASE WHEN status IN ('concluido', 'concluido_parcial') THEN NULL ELSE data_conclusao END,
              devolvido_por_id = NULL, devolvido_em = NULL,
              updated_at = NOW()
          WHERE id = $4`,
@@ -1125,7 +1129,8 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
       await pool.query(
         `UPDATE protocolos
          SET responsavel_id = $1,
-             status = CASE WHEN status = 'aguardando' THEN 'andamento' ELSE status END,
+             status = CASE WHEN status IN ('aguardando', 'concluido', 'concluido_parcial') THEN 'andamento' ELSE status END,
+             data_conclusao = CASE WHEN status IN ('concluido', 'concluido_parcial') THEN NULL ELSE data_conclusao END,
              devolvido_por_id = NULL, devolvido_em = NULL,
              updated_at = NOW()
          WHERE id = $2`,
@@ -1135,9 +1140,10 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
 
     const nomeAtual = responsavelAtual.rows[0]?.nome || 'Desconhecido';
     const nomeNovo = novoResponsavel.rows[0]?.nome || 'Desconhecido';
+    const prefixo = reabrindo ? 'Protocolo reaberto e transferido' : 'Protocolo transferido';
     const descricao = servicoNome
-      ? `Protocolo transferido de ${nomeAtual} para ${nomeNovo}, serviço definido como "${servicoNome}"`
-      : `Protocolo transferido de ${nomeAtual} para ${nomeNovo}`;
+      ? `${prefixo} de ${nomeAtual} para ${nomeNovo}, serviço definido como "${servicoNome}"`
+      : `${prefixo} de ${nomeAtual} para ${nomeNovo}`;
     await pool.query(
       `INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at)
        VALUES ($1, $2, 'transferencia', $3, NOW())`,
