@@ -520,7 +520,15 @@ export default function Protocolos({ usuario }) {
   const [statusList, setStatusList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
   const [horaAtual, setHoraAtual] = useState(agoraManaus());
+
+  // Distribuir em massa (Supervisor)
+  const [selecionados, setSelecionados] = useState(new Set());
+  const [modalDistribuirOpen, setModalDistribuirOpen] = useState(false);
+  const [distribuirRegistrador, setDistribuirRegistrador] = useState("");
+  const [distribuirServico, setDistribuirServico] = useState("");
+  const [distribuindoBulk, setDistribuindoBulk] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setHoraAtual(agoraManaus()), 1000);
@@ -1114,6 +1122,54 @@ export default function Protocolos({ usuario }) {
     }
   };
 
+  // ===== Distribuir em massa (Supervisor) =====
+  const toggleSelecionado = (id) => {
+    setSelecionados((prev) => {
+      const novo = new Set(prev);
+      novo.has(id) ? novo.delete(id) : novo.add(id);
+      return novo;
+    });
+  };
+
+  const abrirModalDistribuir = () => {
+    setDistribuirRegistrador("");
+    setDistribuirServico("");
+    setModalDistribuirOpen(true);
+  };
+
+  const fecharModalDistribuir = () => {
+    setModalDistribuirOpen(false);
+    setDistribuirRegistrador("");
+    setDistribuirServico("");
+  };
+
+  const distribuirUm = async (protocoloId, responsavelId, servicoId) => {
+    const token = localStorage.getItem("token");
+    const resp = await fetch(`${API_URL}/protocolos/${protocoloId}/transferir`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ novo_responsavel_id: responsavelId, servico_id: Number(servicoId) }),
+    });
+    return resp.ok;
+  };
+
+  const confirmarDistribuirBulk = async () => {
+    if (!distribuirRegistrador || !distribuirServico) return;
+    setDistribuindoBulk(true);
+    setErro(""); setSucesso("");
+    let ok = 0;
+    for (const id of selecionados) {
+      if (await distribuirUm(id, distribuirRegistrador, distribuirServico)) ok++;
+    }
+    const nomeRegistrador = funcionarios.find((f) => String(f.id) === String(distribuirRegistrador))?.nome || "registrador";
+    setSelecionados(new Set());
+    fecharModalDistribuir();
+    await carregar();
+    setSucesso(`✅ ${ok} protocolo(s) distribuído(s) para ${nomeRegistrador}.`);
+    setTimeout(() => setSucesso(""), 7000);
+    setDistribuindoBulk(false);
+  };
+
 
   const verificarNumero = async (numero) => {
     if (!numero || numero.length < 2 || editId) return;
@@ -1309,6 +1365,9 @@ export default function Protocolos({ usuario }) {
       {erro && (
         <div className="alert-moderno alert-error-moderno">⚠️ {erro}</div>
       )}
+      {sucesso && (
+        <div className="alert-moderno alert-success-moderno">{sucesso}</div>
+      )}
 
       {resultadoAlertas && resultadoAlertas.total > 0 && (
         <div className="alert-moderno alert-success-moderno">
@@ -1401,6 +1460,27 @@ export default function Protocolos({ usuario }) {
                 </span>
               )}
             </button>
+
+            {usuario?.cargo === "Supervisor" && selecionados.size > 0 && (
+              <>
+                <span style={{ fontSize: 13, color: "#64748b", display: "flex", alignItems: "center" }}>
+                  <strong style={{ color: "#f59e0b", marginRight: 4 }}>{selecionados.size}</strong> selecionado(s)
+                  <button
+                    onClick={() => setSelecionados(new Set())}
+                    style={{ marginLeft: 8, fontSize: 12, color: "#94a3b8", background: "none", border: "none", cursor: "pointer" }}
+                  >
+                    Limpar seleção
+                  </button>
+                </span>
+                <button
+                  className="btn-moderno"
+                  style={{ background: "linear-gradient(135deg, #6366f1, #4f46e5)", color: "white" }}
+                  onClick={abrirModalDistribuir}
+                >
+                  📤 Distribuir {selecionados.size} protocolo(s)
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1408,6 +1488,7 @@ export default function Protocolos({ usuario }) {
           <table className="table-moderno">
             <thead>
               <tr>
+                {usuario?.cargo === "Supervisor" && <th style={{ width: 36 }}></th>}
                 <th>Número</th>
                 <th>Prioridade</th>
                 <th>Serviço</th>
@@ -1423,14 +1504,14 @@ export default function Protocolos({ usuario }) {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan="10" style={{ textAlign: "center" }}>
+                  <td colSpan={usuario?.cargo === "Supervisor" ? "11" : "10"} style={{ textAlign: "center" }}>
                     Carregando...
                   </td>
                 </tr>
               )}
               {!loading && filtrados.length === 0 && (
                 <tr>
-                  <td colSpan="10" style={{ textAlign: "center" }}>
+                  <td colSpan={usuario?.cargo === "Supervisor" ? "11" : "10"} style={{ textAlign: "center" }}>
                     Nenhum protocolo encontrado
                   </td>
                 </tr>
@@ -1445,6 +1526,18 @@ export default function Protocolos({ usuario }) {
                         : corLinha(p)
                     }
                   >
+                    {usuario?.cargo === "Supervisor" && (
+                      <td>
+                        {["aguardando", "andamento"].includes((p.status || "").toLowerCase()) && (
+                          <input
+                            type="checkbox"
+                            checked={selecionados.has(p.id)}
+                            onChange={() => toggleSelecionado(p.id)}
+                            style={{ width: 16, height: 16, cursor: "pointer" }}
+                          />
+                        )}
+                      </td>
+                    )}
                     <td>
                       <strong>{p.numero}</strong>
                       {p.prioridade === 3 && (
@@ -2606,6 +2699,67 @@ export default function Protocolos({ usuario }) {
                 style={{ background: '#f97316' }}
               >
                 {devolverSaving ? "Devolvendo..." : "↩ Confirmar Devolução"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal Distribuir em massa (Supervisor) ===== */}
+      {modalDistribuirOpen && (
+        <div className="modal-overlay" onClick={fecharModalDistribuir}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <h2>📤 Distribuir Protocolos</h2>
+            <p style={{ color: '#64748b', marginBottom: '1.25rem', fontSize: 14 }}>
+              Você vai distribuir <strong>{selecionados.size} protocolo(s)</strong> selecionado(s) para um
+              registrador. Todos vão para <strong>Em andamento</strong> na lista dele.
+            </p>
+
+            <div className="form-group">
+              <label className="form-label">Registrador</label>
+              <select
+                className="form-select"
+                value={distribuirRegistrador}
+                onChange={(e) => setDistribuirRegistrador(e.target.value)}
+              >
+                <option value="">Selecione o registrador...</option>
+                {funcionarios
+                  .filter((f) => f.cargo === "Registrador" && f.ativo)
+                  .map((f) => (
+                    <option key={f.id} value={f.id}>{f.nome}</option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Serviço</label>
+              <select
+                className="form-select"
+                value={distribuirServico}
+                onChange={(e) => setDistribuirServico(e.target.value)}
+              >
+                <option value="">Selecione o serviço...</option>
+                {servicos.map((s) => (
+                  <option key={s.id} value={s.id}>{s.nome}</option>
+                ))}
+              </select>
+              <small style={{ display: "block", marginTop: "0.25rem", color: "#666" }}>
+                Esse serviço será aplicado a todos os protocolos selecionados.
+              </small>
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={fecharModalDistribuir} disabled={distribuindoBulk}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={confirmarDistribuirBulk}
+                disabled={!distribuirRegistrador || !distribuirServico || distribuindoBulk}
+                style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
+              >
+                {distribuindoBulk ? "Distribuindo..." : "📤 Confirmar Distribuição"}
               </button>
             </div>
           </div>
