@@ -1528,8 +1528,7 @@ export default function Protocolos({ usuario }) {
                   >
                     {usuario?.cargo === "Supervisor" && (
                       <td>
-                        {Number(p.responsavel_id) === Number(usuario?.id) &&
-                          (p.status || "").toLowerCase() !== "cancelado" && (
+                        {(p.status || "").toLowerCase() !== "cancelado" && (
                           <input
                             type="checkbox"
                             checked={selecionados.has(p.id)}
