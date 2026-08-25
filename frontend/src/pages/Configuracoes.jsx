@@ -120,7 +120,7 @@ function Configuracoes() {
     setErro('');
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/status', {
+      const response = await fetch(`${API_URL}/status`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
