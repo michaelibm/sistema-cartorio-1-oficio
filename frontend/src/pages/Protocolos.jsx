@@ -524,11 +524,17 @@ export default function Protocolos({ usuario }) {
   const [horaAtual, setHoraAtual] = useState(agoraManaus());
 
   // Distribuir em massa (Supervisor)
-  const [selecionados, setSelecionados] = useState(new Set());
+  // Map<id, protocolo> em vez de um Set de ids, para conseguir mostrar número/
+  // serviço/responsável de cada selecionado dentro do modal, mesmo os que
+  // foram adicionados por busca (e não estão na página/filtro atual da tabela).
+  const [selecionadosMap, setSelecionadosMap] = useState(new Map());
   const [modalDistribuirOpen, setModalDistribuirOpen] = useState(false);
   const [distribuirRegistrador, setDistribuirRegistrador] = useState("");
   const [distribuirServico, setDistribuirServico] = useState("");
   const [distribuindoBulk, setDistribuindoBulk] = useState(false);
+  const [buscaDistribuir, setBuscaDistribuir] = useState("");
+  const [resultadosBuscaDistribuir, setResultadosBuscaDistribuir] = useState([]);
+  const [buscandoDistribuir, setBuscandoDistribuir] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setHoraAtual(agoraManaus()), 1000);
@@ -1123,10 +1129,10 @@ export default function Protocolos({ usuario }) {
   };
 
   // ===== Distribuir em massa (Supervisor) =====
-  const toggleSelecionado = (id) => {
-    setSelecionados((prev) => {
-      const novo = new Set(prev);
-      novo.has(id) ? novo.delete(id) : novo.add(id);
+  const toggleSelecionado = (p) => {
+    setSelecionadosMap((prev) => {
+      const novo = new Map(prev);
+      novo.has(p.id) ? novo.delete(p.id) : novo.set(p.id, p);
       return novo;
     });
   };
@@ -1134,6 +1140,8 @@ export default function Protocolos({ usuario }) {
   const abrirModalDistribuir = () => {
     setDistribuirRegistrador("");
     setDistribuirServico("");
+    setBuscaDistribuir("");
+    setResultadosBuscaDistribuir([]);
     setModalDistribuirOpen(true);
   };
 
@@ -1141,7 +1149,33 @@ export default function Protocolos({ usuario }) {
     setModalDistribuirOpen(false);
     setDistribuirRegistrador("");
     setDistribuirServico("");
+    setBuscaDistribuir("");
+    setResultadosBuscaDistribuir([]);
   };
+
+  // Busca (com debounce) de protocolos por número, direto no banco, pra poder
+  // adicionar ao lote de distribuição sem depender do filtro/página atual da tabela.
+  useEffect(() => {
+    if (!modalDistribuirOpen || buscaDistribuir.trim().length < 2) {
+      setResultadosBuscaDistribuir([]);
+      return;
+    }
+    const termo = buscaDistribuir.trim();
+    setBuscandoDistribuir(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await getProtocolos({ busca: termo });
+        setResultadosBuscaDistribuir(
+          Array.isArray(res) ? res.filter((p) => (p.status || "").toLowerCase() !== "cancelado") : []
+        );
+      } catch {
+        setResultadosBuscaDistribuir([]);
+      } finally {
+        setBuscandoDistribuir(false);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [buscaDistribuir, modalDistribuirOpen]);
 
   const distribuirUm = async (protocoloId, responsavelId, servicoId) => {
     const token = localStorage.getItem("token");
@@ -1158,11 +1192,11 @@ export default function Protocolos({ usuario }) {
     setDistribuindoBulk(true);
     setErro(""); setSucesso("");
     let ok = 0;
-    for (const id of selecionados) {
+    for (const id of selecionadosMap.keys()) {
       if (await distribuirUm(id, distribuirRegistrador, distribuirServico)) ok++;
     }
     const nomeRegistrador = funcionarios.find((f) => String(f.id) === String(distribuirRegistrador))?.nome || "registrador";
-    setSelecionados(new Set());
+    setSelecionadosMap(new Map());
     fecharModalDistribuir();
     await carregar();
     setSucesso(`✅ ${ok} protocolo(s) distribuído(s) para ${nomeRegistrador}.`);
@@ -1461,23 +1495,25 @@ export default function Protocolos({ usuario }) {
               )}
             </button>
 
-            {usuario?.cargo === "Supervisor" && selecionados.size > 0 && (
+            {usuario?.cargo === "Supervisor" && (
               <>
-                <span style={{ fontSize: 13, color: "#64748b", display: "flex", alignItems: "center" }}>
-                  <strong style={{ color: "#f59e0b", marginRight: 4 }}>{selecionados.size}</strong> selecionado(s)
-                  <button
-                    onClick={() => setSelecionados(new Set())}
-                    style={{ marginLeft: 8, fontSize: 12, color: "#94a3b8", background: "none", border: "none", cursor: "pointer" }}
-                  >
-                    Limpar seleção
-                  </button>
-                </span>
+                {selecionadosMap.size > 0 && (
+                  <span style={{ fontSize: 13, color: "#64748b", display: "flex", alignItems: "center" }}>
+                    <strong style={{ color: "#f59e0b", marginRight: 4 }}>{selecionadosMap.size}</strong> selecionado(s)
+                    <button
+                      onClick={() => setSelecionadosMap(new Map())}
+                      style={{ marginLeft: 8, fontSize: 12, color: "#94a3b8", background: "none", border: "none", cursor: "pointer" }}
+                    >
+                      Limpar seleção
+                    </button>
+                  </span>
+                )}
                 <button
                   className="btn-moderno"
                   style={{ background: "linear-gradient(135deg, #6366f1, #4f46e5)", color: "white" }}
                   onClick={abrirModalDistribuir}
                 >
-                  📤 Distribuir {selecionados.size} protocolo(s)
+                  📤 Distribuir{selecionadosMap.size > 0 ? ` ${selecionadosMap.size} protocolo(s)` : " Protocolos"}
                 </button>
               </>
             )}
@@ -1531,8 +1567,8 @@ export default function Protocolos({ usuario }) {
                         {(p.status || "").toLowerCase() !== "cancelado" && (
                           <input
                             type="checkbox"
-                            checked={selecionados.has(p.id)}
-                            onChange={() => toggleSelecionado(p.id)}
+                            checked={selecionadosMap.has(p.id)}
+                            onChange={() => toggleSelecionado(p)}
                             style={{ width: 16, height: 16, cursor: "pointer" }}
                           />
                         )}
@@ -2708,12 +2744,79 @@ export default function Protocolos({ usuario }) {
       {/* ===== Modal Distribuir em massa (Supervisor) ===== */}
       {modalDistribuirOpen && (
         <div className="modal-overlay" onClick={fecharModalDistribuir}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <h2>📤 Distribuir Protocolos</h2>
-            <p style={{ color: '#64748b', marginBottom: '1.25rem', fontSize: 14 }}>
-              Você vai distribuir <strong>{selecionados.size} protocolo(s)</strong> selecionado(s) para um
-              registrador. Todos vão para <strong>Em andamento</strong> na lista dele.
+            <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: 14 }}>
+              Busque e adicione os protocolos que quer distribuir, confira a lista e confirme no final.
             </p>
+
+            <div className="form-group">
+              <label className="form-label">Buscar protocolo por número</label>
+              <input
+                type="text"
+                className="form-input"
+                value={buscaDistribuir}
+                onChange={(e) => setBuscaDistribuir(e.target.value)}
+                placeholder="Digite pelo menos 2 números..."
+                autoFocus
+              />
+            </div>
+
+            {buscaDistribuir.trim().length >= 2 && (
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, maxHeight: 160, overflowY: 'auto', marginBottom: '1rem' }}>
+                {buscandoDistribuir ? (
+                  <div style={{ padding: '0.75rem', fontSize: 13, color: '#94a3b8', textAlign: 'center' }}>Buscando...</div>
+                ) : resultadosBuscaDistribuir.length === 0 ? (
+                  <div style={{ padding: '0.75rem', fontSize: 13, color: '#94a3b8', textAlign: 'center' }}>Nenhum protocolo encontrado.</div>
+                ) : (
+                  resultadosBuscaDistribuir.map((p) => (
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                      <span>
+                        <strong>#{p.numero}</strong> — {p.servico_nome} — {p.responsavel_nome} — {statusLabel(p.status)}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.2rem 0.6rem', fontSize: 12 }}
+                        disabled={selecionadosMap.has(p.id)}
+                        onClick={() => toggleSelecionado(p)}
+                      >
+                        {selecionadosMap.has(p.id) ? "Adicionado" : "+ Adicionar"}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">
+                Protocolos selecionados ({selecionadosMap.size})
+              </label>
+              {selecionadosMap.size === 0 ? (
+                <div style={{ fontSize: 13, color: '#94a3b8', padding: '0.5rem 0' }}>
+                  Nenhum protocolo adicionado ainda — busque acima ou marque direto na tabela.
+                </div>
+              ) : (
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, maxHeight: 160, overflowY: 'auto' }}>
+                  {[...selecionadosMap.values()].map((p) => (
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                      <span>
+                        <strong>#{p.numero}</strong> — {p.servico_nome} — {p.responsavel_nome}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleSelecionado(p)}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13 }}
+                        title="Remover"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="form-group">
               <label className="form-label">Registrador</label>
@@ -2756,10 +2859,10 @@ export default function Protocolos({ usuario }) {
                 type="button"
                 className="btn btn-primary"
                 onClick={confirmarDistribuirBulk}
-                disabled={!distribuirRegistrador || !distribuirServico || distribuindoBulk}
+                disabled={!distribuirRegistrador || !distribuirServico || selecionadosMap.size === 0 || distribuindoBulk}
                 style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
               >
-                {distribuindoBulk ? "Distribuindo..." : "📤 Confirmar Distribuição"}
+                {distribuindoBulk ? "Distribuindo..." : `📤 Confirmar Distribuição (${selecionadosMap.size})`}
               </button>
             </div>
           </div>

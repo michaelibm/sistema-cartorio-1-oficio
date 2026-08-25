@@ -37,7 +37,7 @@ async function calcularDataVencimento(dataEntrada, prazo, tipoPrazo) {
 // Listar todos os protocolos (com controle de permissões)
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const { status, responsavel_id } = req.query;
+    const { status, responsavel_id, busca } = req.query;
 
     let query = `
       SELECT p.*, s.nome as servico_nome, s.prazo, s.tipo_prazo,
@@ -82,7 +82,17 @@ router.get('/', authMiddleware, async (req, res) => {
       paramCount++;
     }
 
+    // Busca por número (usada na barra de busca e no modal de Distribuir em massa)
+    if (busca) {
+      query += ` AND p.numero ILIKE $${paramCount}`;
+      params.push(`%${busca}%`);
+      paramCount++;
+    }
+
     query += ' ORDER BY p.data_entrada DESC, p.data_vencimento ASC';
+    if (busca) {
+      query += ' LIMIT 20';
+    }
 
     const result = await pool.query(query, params);
     res.json(result.rows);
