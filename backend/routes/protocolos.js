@@ -1266,7 +1266,10 @@ router.post('/:id/transferir-arquivo', authMiddleware, async (req, res) => {
     const s = servicoArquivo.rows[0];
 
     const responsavelAtual = await pool.query('SELECT nome FROM usuarios WHERE id = $1', [p.responsavel_id]);
-    const novaDataVencimento = await calcularDataVencimento(p.data_entrada, s.prazo, s.tipo_prazo);
+    // Prazo do Arquivo conta a partir de hoje (quando chega pra eles), não da
+    // data de entrada original do protocolo - senão já nasce vencido.
+    const hoje = new Date().toISOString().split('T')[0];
+    const novaDataVencimento = await calcularDataVencimento(hoje, s.prazo, s.tipo_prazo);
 
     await pool.query(
       `UPDATE protocolos

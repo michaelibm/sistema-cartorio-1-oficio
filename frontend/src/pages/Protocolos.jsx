@@ -22,6 +22,12 @@ import {
   getSessoesAtivas,
 } from "../services/api";
 
+// Únicos valores que a coluna interna "status" realmente aceita. Qualquer
+// outro valor selecionado no filtro (rótulo customizado de Configurações,
+// ex: "fechamento/digitalização") é tratado como filtro pela etiqueta
+// "situacao" do protocolo, não pelo status real.
+const STATUS_CODIGOS_INTERNOS = ["aguardando", "andamento", "concluido", "concluido_parcial", "cancelado"];
+
 const statusLabel = (s) => {
   const sl = (s || "").toLowerCase();
   if (sl === "andamento")                return "Em andamento";
@@ -675,6 +681,7 @@ export default function Protocolos({ usuario }) {
         getProtocolos({
           status: fStatus === "__vencido__" ? "andamento"
             : fStatus === "__devolvido__" ? undefined
+            : (fStatus && !STATUS_CODIGOS_INTERNOS.includes(fStatus)) ? undefined
             : (fStatus || undefined),
           responsavel_id: fResp || undefined,
         }),
@@ -881,6 +888,11 @@ export default function Protocolos({ usuario }) {
       });
     } else if (fStatus === "__devolvido__") {
       base = base.filter((p) => !!p.devolvido_por_id);
+    } else if (fStatus && !STATUS_CODIGOS_INTERNOS.includes(fStatus)) {
+      // Rótulo customizado (cadastrado em Configurações) que não é um dos
+      // status internos reais - filtra pela etiqueta "situacao" do protocolo.
+      const alvo = fStatus.trim().toLowerCase();
+      base = base.filter((p) => (p.situacao || "").trim().toLowerCase() === alvo);
     }
     const s = q.trim().toLowerCase();
     const filtradosPorBusca = !s ? base : base.filter(
