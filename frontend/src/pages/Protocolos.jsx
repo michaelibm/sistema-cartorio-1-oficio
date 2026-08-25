@@ -9,6 +9,7 @@ import {
   createProtocolo,
   deleteProtocolo,
   devolverProtocolo,
+  transferirProtocoloParaArquivo,
   getFuncionarios,
   getProtocolos,
   getServicos,
@@ -1070,6 +1071,24 @@ export default function Protocolos({ usuario }) {
     }
   };
 
+  const [enviandoArquivo, setEnviandoArquivo] = useState(null);
+
+  const transferirArquivo = async (p) => {
+    if (!window.confirm(`Transferir o protocolo #${p.numero} para o setor Arquivo?\n\nO responsável muda para quem está cadastrado no setor Arquivo, e o serviço passa a ser "fechamento/digitalização".`)) return;
+    setErro(""); setSucesso("");
+    setEnviandoArquivo(p.id);
+    try {
+      await transferirProtocoloParaArquivo(p.id);
+      await carregar();
+      setSucesso(`✅ Protocolo #${p.numero} transferido para o Arquivo.`);
+      setTimeout(() => setSucesso(""), 7000);
+    } catch (e) {
+      setErro(e?.message || "Erro ao transferir protocolo para o Arquivo");
+    } finally {
+      setEnviandoArquivo(null);
+    }
+  };
+
   const excluir = async (id) => {
     if (
       !window.confirm("Excluir este protocolo? (será marcado como cancelado)")
@@ -1609,6 +1628,11 @@ export default function Protocolos({ usuario }) {
                           ↩ Devolvido por {p.devolvido_por_nome}
                         </div>
                       )}
+                      {p.situacao && (
+                        <div style={{ marginTop: 3, fontSize: 11, fontWeight: 700, color: "#4338ca" }}>
+                          🗄️ {p.situacao}
+                        </div>
+                      )}
                     </td>
                     <td>{p.responsavel_setor || "-"}</td>
                     <td>{p.responsavel_nome}</td>
@@ -1748,6 +1772,19 @@ export default function Protocolos({ usuario }) {
                             title="Devolver para a coordenação"
                           >
                             ↩
+                          </button>
+                        )}
+                        {usuario?.cargo === "Registrador" &&
+                          ["andamento", "aguardando", "concluido", "concluido_parcial"].includes(p.status) &&
+                          Number(p.responsavel_id) === Number(usuario?.id) && (
+                          <button
+                            className="btn-action"
+                            style={{ background: "#e0e7ff", color: "#4338ca" }}
+                            onClick={() => transferirArquivo(p)}
+                            disabled={enviandoArquivo === p.id}
+                            title="Transferir para o setor Arquivo"
+                          >
+                            {enviandoArquivo === p.id ? "⏳" : "🗄️"}
                           </button>
                         )}
                         <button

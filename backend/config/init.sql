@@ -50,7 +50,8 @@ CREATE TABLE protocolos (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     devolvido_por_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
-    devolvido_em TIMESTAMP
+    devolvido_em TIMESTAMP,
+    situacao VARCHAR(100)
 );
 
 -- Tabela de feriados

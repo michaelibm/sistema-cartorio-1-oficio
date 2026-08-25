@@ -122,6 +122,14 @@ export const devolverProtocolo = async (id, novoResponsavelId) => {
   return handleResponse(response);
 };
 
+export const transferirProtocoloParaArquivo = async (id) => {
+  const response = await fetch(`${API_URL}/protocolos/${id}/transferir-arquivo`, {
+    method: 'POST',
+    headers: getAuthHeader(),
+  });
+  return handleResponse(response);
+};
+
 export const concluirProtocolo = async (id) => {
   const response = await fetch(`${API_URL}/protocolos/${id}/concluir`, {
     method: 'PATCH',

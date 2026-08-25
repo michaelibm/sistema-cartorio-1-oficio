@@ -512,9 +512,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
       params.push(responsavel_id);
       paramCount++;
 
-      // Reatribuir limpa o sinalizador de "devolvido para coordenação",
-      // já que alguém assumiu o protocolo de novo.
-      updates.push(`devolvido_por_id = NULL`, `devolvido_em = NULL`);
+      // Reatribuir limpa o sinalizador de "devolvido para coordenação" e a
+      // etiqueta de situação (ex: "fechamento/digitalização"), já que alguém
+      // assumiu o protocolo de novo.
+      updates.push(`devolvido_por_id = NULL`, `devolvido_em = NULL`, `situacao = NULL`);
     }
 
     if (observacoes !== undefined) {
@@ -1130,7 +1131,7 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
          SET responsavel_id = $1, servico_id = $2, data_vencimento = $3,
              status = CASE WHEN status IN ('aguardando', 'concluido', 'concluido_parcial') THEN 'andamento' ELSE status END,
              data_conclusao = CASE WHEN status IN ('concluido', 'concluido_parcial') THEN NULL ELSE data_conclusao END,
-             devolvido_por_id = NULL, devolvido_em = NULL,
+             devolvido_por_id = NULL, devolvido_em = NULL, situacao = NULL,
              updated_at = NOW()
          WHERE id = $4`,
         [novo_responsavel_id, servico_id, novaDataVencimento, id]
@@ -1141,7 +1142,7 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
          SET responsavel_id = $1,
              status = CASE WHEN status IN ('aguardando', 'concluido', 'concluido_parcial') THEN 'andamento' ELSE status END,
              data_conclusao = CASE WHEN status IN ('concluido', 'concluido_parcial') THEN NULL ELSE data_conclusao END,
-             devolvido_por_id = NULL, devolvido_em = NULL,
+             devolvido_por_id = NULL, devolvido_em = NULL, situacao = NULL,
              updated_at = NOW()
          WHERE id = $2`,
         [novo_responsavel_id, id]
@@ -1215,6 +1216,82 @@ router.post('/:id/devolver', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Erro ao devolver protocolo:', error);
     res.status(500).json({ message: 'Erro ao devolver protocolo' });
+  }
+});
+
+// Transfere o protocolo para o setor Arquivo: acha automaticamente o usuário
+// cadastrado com setor = 'Arquivo' e troca o serviço para
+// "fechamento/digitalização". A coluna "situacao" é só uma etiqueta visual -
+// o status interno (andamento/aguardando/concluido/...) não muda de família,
+// só reabre se estava concluído.
+router.post('/:id/transferir-arquivo', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!['Registrador', 'Supervisor', 'Coordenador'].includes(req.user.cargo)) {
+      return res.status(403).json({ message: 'Você não pode transferir protocolos para o Arquivo' });
+    }
+
+    const protocolo = await pool.query(
+      'SELECT id, numero, responsavel_id, status, data_entrada FROM protocolos WHERE id = $1',
+      [id]
+    );
+    if (!protocolo.rows.length) {
+      return res.status(404).json({ message: 'Protocolo não encontrado' });
+    }
+    const p = protocolo.rows[0];
+
+    if (req.user.cargo === 'Registrador' && p.responsavel_id != req.user.id) {
+      return res.status(403).json({ message: 'Você só pode transferir seus próprios protocolos' });
+    }
+    if (!['andamento', 'aguardando', 'concluido', 'concluido_parcial'].includes(p.status)) {
+      return res.status(400).json({ message: 'Não é possível transferir este protocolo para o Arquivo' });
+    }
+
+    const arquivoUser = await pool.query(
+      "SELECT id, nome FROM usuarios WHERE setor = 'Arquivo' AND ativo = true ORDER BY id LIMIT 1"
+    );
+    if (!arquivoUser.rows.length) {
+      return res.status(404).json({ message: 'Nenhum usuário cadastrado no setor Arquivo. Cadastre um em Funcionários.' });
+    }
+    const destino = arquivoUser.rows[0];
+
+    const servicoArquivo = await pool.query(
+      'SELECT id, prazo, tipo_prazo FROM servicos WHERE LOWER(nome) = LOWER($1) AND ativo = true LIMIT 1',
+      ['fechamento/digitalização']
+    );
+    if (!servicoArquivo.rows.length) {
+      return res.status(404).json({ message: 'Serviço "fechamento/digitalização" não encontrado. Cadastre-o em Tipos de Serviço.' });
+    }
+    const s = servicoArquivo.rows[0];
+
+    const responsavelAtual = await pool.query('SELECT nome FROM usuarios WHERE id = $1', [p.responsavel_id]);
+    const novaDataVencimento = await calcularDataVencimento(p.data_entrada, s.prazo, s.tipo_prazo);
+
+    await pool.query(
+      `UPDATE protocolos
+       SET responsavel_id = $1, servico_id = $2, data_vencimento = $3,
+           situacao = $4,
+           status = CASE WHEN status IN ('aguardando', 'concluido', 'concluido_parcial') THEN 'andamento' ELSE status END,
+           data_conclusao = CASE WHEN status IN ('concluido', 'concluido_parcial') THEN NULL ELSE data_conclusao END,
+           devolvido_por_id = NULL, devolvido_em = NULL,
+           updated_at = NOW()
+       WHERE id = $5`,
+      [destino.id, s.id, novaDataVencimento, 'fechamento/digitalização', id]
+    );
+
+    await pool.query(
+      'INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at) VALUES ($1, $2, $3, $4, NOW())',
+      [
+        id, req.user.id, 'transferencia_arquivo',
+        `Protocolo ${p.numero} transferido de ${responsavelAtual.rows[0]?.nome || 'Desconhecido'} para o setor Arquivo (${destino.nome}), serviço "fechamento/digitalização"`,
+      ]
+    );
+
+    res.json({ message: 'Protocolo transferido para o Arquivo com sucesso' });
+  } catch (error) {
+    console.error('Erro ao transferir protocolo para o Arquivo:', error);
+    res.status(500).json({ message: 'Erro ao transferir protocolo para o Arquivo' });
   }
 });
 
