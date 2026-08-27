@@ -31,6 +31,9 @@ const painelRoutes = require('./routes/painel');
 
 const configuracoesRoutes = require('./routes/configuracoes');
 
+// ✅ API DE PRODUTIVIDADE (integração externa, protegida por API key)
+const produtividadeRoutes = require('./routes/produtividade');
+
 app.use('/api/auth', authRoutes);
 app.use('/api/protocolos', protocoloRoutes);
 app.use('/api/servicos', servicoRoutes);
@@ -49,6 +52,8 @@ app.use('/api/usucapiao', usucapiaoRoutes);
 app.use('/api/painel', painelRoutes);
 
 app.use('/api/configuracoes', configuracoesRoutes);
+
+app.use('/api/produtividade', produtividadeRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
