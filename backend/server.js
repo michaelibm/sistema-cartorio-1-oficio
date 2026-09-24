@@ -34,6 +34,9 @@ const configuracoesRoutes = require('./routes/configuracoes');
 // ✅ API DE PRODUTIVIDADE (integração externa, protegida por API key)
 const produtividadeRoutes = require('./routes/produtividade');
 
+// ✅ MÓDULO ATENDIMENTO: encaminhamentos (aba Devolução) e consulta de localização
+const atendimentoRoutes = require('./routes/atendimento');
+
 app.use('/api/auth', authRoutes);
 app.use('/api/protocolos', protocoloRoutes);
 app.use('/api/servicos', servicoRoutes);
@@ -54,6 +57,8 @@ app.use('/api/painel', painelRoutes);
 app.use('/api/configuracoes', configuracoesRoutes);
 
 app.use('/api/produtividade', produtividadeRoutes);
+
+app.use('/api/atendimento', atendimentoRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -10,6 +10,7 @@ import {
   deleteProtocolo,
   devolverProtocolo,
   transferirProtocoloParaArquivo,
+  enviarProtocoloParaAtendimento,
   getFuncionarios,
   getProtocolos,
   getServicos,
@@ -1101,6 +1102,45 @@ export default function Protocolos({ usuario }) {
     }
   };
 
+  // ===== Enviar para Atendimento =====
+  const [modalAtendimentoOpen, setModalAtendimentoOpen] = useState(false);
+  const [atendimentoProtocoloSel, setAtendimentoProtocoloSel] = useState(null);
+  const [atendimentoTipo, setAtendimentoTipo] = useState("");
+  const [atendimentoOnr, setAtendimentoOnr] = useState(false);
+  const [enviandoAtendimento, setEnviandoAtendimento] = useState(false);
+
+  const abrirEnviarAtendimento = (p) => {
+    setAtendimentoProtocoloSel(p);
+    setAtendimentoTipo("");
+    setAtendimentoOnr(false);
+    setModalAtendimentoOpen(true);
+  };
+
+  const fecharEnviarAtendimento = () => {
+    setModalAtendimentoOpen(false);
+    setAtendimentoProtocoloSel(null);
+    setAtendimentoTipo("");
+    setAtendimentoOnr(false);
+  };
+
+  const confirmarEnviarAtendimento = async () => {
+    if (!atendimentoTipo || !atendimentoProtocoloSel) return;
+    setEnviandoAtendimento(true);
+    setErro(""); setSucesso("");
+    try {
+      await enviarProtocoloParaAtendimento(atendimentoProtocoloSel.id, { tipo: atendimentoTipo, onr: atendimentoOnr });
+      const numero = atendimentoProtocoloSel.numero;
+      fecharEnviarAtendimento();
+      await carregar();
+      setSucesso(`✅ Protocolo #${numero} enviado para o Atendimento.`);
+      setTimeout(() => setSucesso(""), 7000);
+    } catch (e) {
+      setErro(e?.message || "Erro ao enviar protocolo para o Atendimento");
+    } finally {
+      setEnviandoAtendimento(false);
+    }
+  };
+
   const excluir = async (id) => {
     if (
       !window.confirm("Excluir este protocolo? (será marcado como cancelado)")
@@ -1797,6 +1837,18 @@ export default function Protocolos({ usuario }) {
                             title="Transferir para o setor Arquivo"
                           >
                             {enviandoArquivo === p.id ? "⏳" : "🗄️"}
+                          </button>
+                        )}
+                        {p.status === "concluido" &&
+                          (usuario?.cargo === "Supervisor" || usuario?.cargo === "Coordenador" ||
+                            (usuario?.cargo === "Registrador" && Number(p.responsavel_id) === Number(usuario?.id))) && (
+                          <button
+                            className="btn-action"
+                            style={{ background: "#dbeafe", color: "#1d4ed8" }}
+                            onClick={() => abrirEnviarAtendimento(p)}
+                            title="Enviar para Atendimento"
+                          >
+                            📨
                           </button>
                         )}
                         <button
@@ -2912,6 +2964,59 @@ export default function Protocolos({ usuario }) {
                 style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
               >
                 {distribuindoBulk ? "Distribuindo..." : `📤 Confirmar Distribuição (${selecionadosMap.size})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal Enviar para Atendimento ===== */}
+      {modalAtendimentoOpen && atendimentoProtocoloSel && (
+        <div className="modal-overlay" onClick={fecharEnviarAtendimento}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <h2>📨 Enviar para Atendimento</h2>
+            <p style={{ color: '#64748b', marginBottom: '1.25rem', fontSize: 14 }}>
+              Protocolo <strong>#{atendimentoProtocoloSel.numero}</strong> será encaminhado ao setor de
+              Atendimento, com status <strong>Pendente de Devolução</strong> até lá.
+            </p>
+
+            <div className="form-group">
+              <label className="form-label">Qual o tipo de envio para Atendimento? *</label>
+              <select
+                className="form-select"
+                value={atendimentoTipo}
+                onChange={(e) => setAtendimentoTipo(e.target.value)}
+              >
+                <option value="">Selecione...</option>
+                <option value="orcamento">Orçamento</option>
+                <option value="nota_devolutiva">Nota Devolutiva</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={atendimentoOnr}
+                  onChange={(e) => setAtendimentoOnr(e.target.checked)}
+                  style={{ width: 16, height: 16, cursor: "pointer" }}
+                />
+                Protocolo ONR
+              </label>
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={fecharEnviarAtendimento} disabled={enviandoAtendimento}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={confirmarEnviarAtendimento}
+                disabled={!atendimentoTipo || enviandoAtendimento}
+                style={{ background: '#1d4ed8' }}
+              >
+                {enviandoAtendimento ? "Enviando..." : "📨 Confirmar envio para Atendimento"}
               </button>
             </div>
           </div>

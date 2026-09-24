@@ -1298,6 +1298,68 @@ router.post('/:id/transferir-arquivo', authMiddleware, async (req, res) => {
   }
 });
 
+// Envia um protocolo concluído para o setor de Atendimento (Orçamento ou Nota
+// Devolutiva, com indicação de ONR). Não muda protocolos.status nem
+// responsavel_id - cria um registro na tabela de encaminhamentos, que fica
+// "pendente" até o Atendimento concluir a devolução.
+router.post('/:id/enviar-atendimento', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tipo, onr } = req.body;
+
+    if (!['Registrador', 'Supervisor', 'Coordenador'].includes(req.user.cargo)) {
+      return res.status(403).json({ message: 'Você não pode enviar protocolos para o Atendimento' });
+    }
+
+    const tiposValidos = ['orcamento', 'nota_devolutiva'];
+    if (!tiposValidos.includes(tipo)) {
+      return res.status(400).json({ message: 'Selecione o tipo de envio: Orçamento ou Nota Devolutiva.' });
+    }
+
+    const protocolo = await pool.query('SELECT id, numero, responsavel_id, status FROM protocolos WHERE id = $1', [id]);
+    if (!protocolo.rows.length) {
+      return res.status(404).json({ message: 'Protocolo não encontrado' });
+    }
+    const p = protocolo.rows[0];
+
+    if (req.user.cargo === 'Registrador' && p.responsavel_id != req.user.id) {
+      return res.status(403).json({ message: 'Você só pode enviar seus próprios protocolos para o Atendimento' });
+    }
+    // Regra explícita: só protocolos CONCLUÍDOS (não aceita concluído parcial,
+    // em andamento, aguardando ou cancelado).
+    if (p.status !== 'concluido') {
+      return res.status(400).json({ message: 'Somente protocolos concluídos podem ser enviados para o Atendimento.' });
+    }
+
+    const remetente = await pool.query('SELECT nome, setor FROM usuarios WHERE id = $1', [req.user.id]);
+    const nomeRemetente = remetente.rows[0]?.nome || req.user.nome || req.user.email;
+    const setorOrigem = remetente.rows[0]?.setor || null;
+    const onrBool = !!onr;
+
+    const encaminhamento = await pool.query(
+      `INSERT INTO protocolo_encaminhamentos_atendimento
+        (protocolo_id, tipo, onr, enviado_por_id, setor_origem, enviado_em, status)
+       VALUES ($1, $2, $3, $4, $5, NOW(), 'pendente')
+       RETURNING *`,
+      [id, tipo, onrBool, req.user.id, setorOrigem]
+    );
+
+    const tipoLabel = tipo === 'orcamento' ? 'Orçamento' : 'Nota Devolutiva';
+    await pool.query(
+      'INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at) VALUES ($1, $2, $3, $4, NOW())',
+      [
+        id, req.user.id, 'ENVIO_ATENDIMENTO',
+        `Protocolo ${p.numero} enviado para o Atendimento por ${nomeRemetente} - Tipo: ${tipoLabel}${onrBool ? ' - Protocolo ONR' : ''}`,
+      ]
+    );
+
+    res.status(201).json(encaminhamento.rows[0]);
+  } catch (error) {
+    console.error('Erro ao enviar protocolo para o Atendimento:', error);
+    res.status(500).json({ message: 'Erro ao enviar protocolo para o Atendimento' });
+  }
+});
+
 // Reabrir protocolo concluído
 router.post('/:id/reabrir', authMiddleware, async (req, res) => {
   try {

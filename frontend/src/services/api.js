@@ -122,6 +122,38 @@ export const devolverProtocolo = async (id, novoResponsavelId) => {
   return handleResponse(response);
 };
 
+export const enviarProtocoloParaAtendimento = async (id, { tipo, onr }) => {
+  const response = await fetch(`${API_URL}/protocolos/${id}/enviar-atendimento`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ tipo, onr: !!onr }),
+  });
+  return handleResponse(response);
+};
+
+// ATENDIMENTO (aba Devolução)
+export const getEncaminhamentosAtendimento = async (status = 'pendente') => {
+  const response = await fetch(`${API_URL}/atendimento/encaminhamentos?status=${encodeURIComponent(status)}`, {
+    headers: getAuthHeader(),
+  });
+  return handleResponse(response);
+};
+
+export const concluirEncaminhamentoAtendimento = async (id) => {
+  const response = await fetch(`${API_URL}/atendimento/encaminhamentos/${id}/concluir`, {
+    method: 'PATCH',
+    headers: getAuthHeader(),
+  });
+  return handleResponse(response);
+};
+
+export const consultarLocalizacaoProtocolo = async (busca) => {
+  const response = await fetch(`${API_URL}/atendimento/localizacao?busca=${encodeURIComponent(busca)}`, {
+    headers: getAuthHeader(),
+  });
+  return handleResponse(response);
+};
+
 export const transferirProtocoloParaArquivo = async (id) => {
   const response = await fetch(`${API_URL}/protocolos/${id}/transferir-arquivo`, {
     method: 'POST',

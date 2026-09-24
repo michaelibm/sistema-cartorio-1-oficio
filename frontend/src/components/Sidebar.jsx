@@ -19,6 +19,7 @@ function Sidebar({ usuario, onLogout, onToggle }) {
     { path: '/protocolos', icon: '📋', label: 'Protocolos', color: '#8b5cf6', roles: ['Supervisor', 'Coordenador', 'Registrador'] },
     { path: '/fila', icon: '📥', label: 'Fila de Atendimento', color: '#f59e0b', roles: ['Supervisor', 'Coordenador', 'Registrador'] },
     { path: '/', icon: '🎫', label: 'Balcão de Atendimento', color: '#f59e0b', roles: ['Atendente'] },
+    { path: '/devolucao', icon: '↩️', label: 'Devolução', color: '#1d4ed8', roles: ['Atendente', 'Supervisor', 'Coordenador'] },
     { path: '/servicos', icon: '⚙️', label: 'Tipos de Serviço', color: '#10b981', roles: ['Supervisor', 'Coordenador'] },
     { path: '/usucapiao', icon: '🏡', label: 'Usucapião', color: '#6366f1', roles: ['Supervisor', 'Coordenador', 'Registrador'] },
     { path: '/minha-produtividade', icon: '⚡', label: 'Minha Produtividade', color: '#f59e0b', roles: ['Registrador'] },

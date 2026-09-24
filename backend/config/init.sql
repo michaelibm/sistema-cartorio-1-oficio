@@ -72,6 +72,22 @@ CREATE TABLE historico (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Encaminhamentos de protocolo concluído para o setor de Atendimento
+CREATE TABLE protocolo_encaminhamentos_atendimento (
+    id SERIAL PRIMARY KEY,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id) ON DELETE CASCADE,
+    tipo VARCHAR(30) NOT NULL CHECK (tipo IN ('orcamento', 'nota_devolutiva')),
+    onr BOOLEAN NOT NULL DEFAULT false,
+    enviado_por_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    setor_origem VARCHAR(100),
+    enviado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'concluido')),
+    concluido_por_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    concluido_em TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Índices para melhor performance
 CREATE INDEX idx_protocolos_status ON protocolos(status);
 CREATE INDEX idx_protocolos_responsavel ON protocolos(responsavel_id);

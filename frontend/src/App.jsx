@@ -11,6 +11,7 @@ import Configuracoes from './pages/Configuracoes';
 import Painel from './pages/Painel';
 import FilaAtendimento from './pages/FilaAtendimento';
 import FilaRegistrador from './pages/FilaRegistrador';
+import Devolucao from './pages/Devolucao';
 import Historico from './pages/Historico';
 import Usucapiao from './pages/Usucapiao';
 import MinhaProductividade from './pages/MinhaProductividade';
@@ -82,6 +83,7 @@ function App() {
           <main className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
             <Routes>
               <Route path="/" element={<FilaAtendimento usuario={usuario} />} />
+              <Route path="/devolucao" element={<Devolucao usuario={usuario} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
@@ -103,6 +105,7 @@ function App() {
             <Route path="/" element={<Dashboard usuario={usuario} />} />
             <Route path="/protocolos" element={<Protocolos usuario={usuario} />} />
             <Route path="/fila" element={<FilaRegistrador usuario={usuario} />} />
+            <Route path="/devolucao" element={<Devolucao usuario={usuario} />} />
             <Route path="/servicos" element={<Servicos usuario={usuario} />} />
             <Route path="/funcionarios" element={<Funcionarios usuario={usuario} />} />
             <Route path="/historico" element={<Historico usuario={usuario} />} />

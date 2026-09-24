@@ -69,6 +69,28 @@ CREATE TABLE IF NOT EXISTS public.protocolo_notas
 COMMENT ON TABLE public.protocolo_notas
     IS 'Notas adicionadas pelos usuários aos protocolos';
 
+CREATE TABLE IF NOT EXISTS public.protocolo_encaminhamentos_atendimento
+(
+    id serial NOT NULL,
+    protocolo_id integer NOT NULL,
+    tipo character varying(30) COLLATE pg_catalog."default" NOT NULL,
+    onr boolean NOT NULL DEFAULT false,
+    enviado_por_id integer,
+    setor_origem character varying(100) COLLATE pg_catalog."default",
+    enviado_em timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'pendente',
+    concluido_por_id integer,
+    concluido_em timestamp without time zone,
+    created_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT protocolo_encaminhamentos_atendimento_pkey PRIMARY KEY (id),
+    CONSTRAINT protocolo_encaminhamentos_atendimento_tipo_check CHECK (tipo IN ('orcamento', 'nota_devolutiva')),
+    CONSTRAINT protocolo_encaminhamentos_atendimento_status_check CHECK (status IN ('pendente', 'concluido'))
+);
+
+COMMENT ON TABLE public.protocolo_encaminhamentos_atendimento
+    IS 'Encaminhamentos de protocolo concluído para o setor de Atendimento (Orçamento/Nota Devolutiva)';
+
 COMMENT ON COLUMN public.protocolo_notas.nota
     IS 'Conteúdo da nota adicionada ao protocolo';
 
@@ -207,6 +229,30 @@ CREATE INDEX IF NOT EXISTS idx_protocolo_notas_protocolo_id
 
 ALTER TABLE IF EXISTS public.protocolo_notas
     ADD CONSTRAINT protocolo_notas_usuario_id_fkey FOREIGN KEY (usuario_id)
+    REFERENCES public.usuarios (id) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE SET NULL;
+
+ALTER TABLE IF EXISTS public.protocolo_encaminhamentos_atendimento
+    ADD CONSTRAINT protocolo_encaminhamentos_atendimento_protocolo_id_fkey FOREIGN KEY (protocolo_id)
+    REFERENCES public.protocolos (id) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS idx_encaminhamentos_protocolo
+    ON public.protocolo_encaminhamentos_atendimento(protocolo_id);
+
+CREATE INDEX IF NOT EXISTS idx_encaminhamentos_status
+    ON public.protocolo_encaminhamentos_atendimento(status);
+
+ALTER TABLE IF EXISTS public.protocolo_encaminhamentos_atendimento
+    ADD CONSTRAINT protocolo_encaminhamentos_atendimento_enviado_por_id_fkey FOREIGN KEY (enviado_por_id)
+    REFERENCES public.usuarios (id) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE SET NULL;
+
+ALTER TABLE IF EXISTS public.protocolo_encaminhamentos_atendimento
+    ADD CONSTRAINT protocolo_encaminhamentos_atendimento_concluido_por_id_fkey FOREIGN KEY (concluido_por_id)
     REFERENCES public.usuarios (id) MATCH SIMPLE
     ON UPDATE NO ACTION
     ON DELETE SET NULL;
