@@ -33,7 +33,6 @@ router.get('/encaminhamentos', authMiddleware, async (req, res) => {
         e.setor_origem, e.enviado_em, e.status,
         e.concluido_em,
         p.numero as protocolo_numero, p.data_entrada as protocolo_data_entrada,
-        p.nome_cliente,
         env.id as enviado_por_id, env.nome as enviado_por_nome,
         conc.nome as concluido_por_nome,
         resp.id as responsavel_atual_id, resp.nome as responsavel_atual_nome,
@@ -106,13 +105,13 @@ router.get('/localizacao', authMiddleware, async (req, res) => {
 
     const result = await pool.query(`
       SELECT
-        p.id, p.numero, p.status, p.data_entrada, p.nome_cliente,
+        p.id, p.numero, p.status, p.data_entrada, p.observacoes,
         resp.id as responsavel_id, resp.nome as responsavel_nome, resp.setor as responsavel_setor,
         enc.status as encaminhamento_status, enc.setor_origem as encaminhamento_setor_origem,
         enc.enviado_em as encaminhamento_enviado_em, enc.tipo as encaminhamento_tipo, enc.onr as encaminhamento_onr,
         hist.created_at as ultima_movimentacao_em, hist.acao as ultima_movimentacao_acao, hist.descricao as ultima_movimentacao_descricao
       FROM protocolos p
-      JOIN usuarios resp ON p.responsavel_id = resp.id
+      LEFT JOIN usuarios resp ON p.responsavel_id = resp.id
       LEFT JOIN LATERAL (
         SELECT * FROM protocolo_encaminhamentos_atendimento e
         WHERE e.protocolo_id = p.id
@@ -125,7 +124,7 @@ router.get('/localizacao', authMiddleware, async (req, res) => {
         ORDER BY h.created_at DESC
         LIMIT 1
       ) hist ON true
-      WHERE p.numero ILIKE $1 OR p.nome_cliente ILIKE $1
+      WHERE p.numero ILIKE $1 OR p.observacoes ILIKE $1
       ORDER BY p.data_entrada DESC
       LIMIT 15
     `, [`%${busca}%`]);
@@ -137,7 +136,6 @@ router.get('/localizacao', authMiddleware, async (req, res) => {
         numero: p.numero,
         status: p.status,
         data_entrada: p.data_entrada,
-        nome_cliente: p.nome_cliente,
         setor_atual: emAtendimento ? 'Atendimento' : (p.responsavel_setor || null),
         responsavel_atual: emAtendimento ? null : p.responsavel_nome,
         origem_anterior: p.encaminhamento_setor_origem || null,
