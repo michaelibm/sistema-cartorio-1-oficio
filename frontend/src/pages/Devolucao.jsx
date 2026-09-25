@@ -180,7 +180,7 @@ export default function Devolucao({ usuario }) {
                 <th>Setor Origem</th>
                 <th>Responsável Atual</th>
                 <th>Status</th>
-                <th>Ações</th>
+                <th style={{ position: "sticky", right: 0, background: "#f9fafb" }}>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -211,11 +211,11 @@ export default function Devolucao({ usuario }) {
                       {item.status === "pendente" ? "Pendente de Devolução" : "Devolução Concluída"}
                     </span>
                   </td>
-                  <td>
+                  <td style={{ position: "sticky", right: 0, background: "#fff", boxShadow: "-6px 0 6px -6px rgba(0,0,0,0.15)" }}>
                     {item.status === "pendente" ? (
                       <button
                         className="btn-action"
-                        style={{ background: "#dcfce7", color: "#16a34a", fontWeight: 700 }}
+                        style={{ background: "#dcfce7", color: "#16a34a", fontWeight: 700, whiteSpace: "nowrap" }}
                         onClick={() => concluir(item)}
                         disabled={concluindoId === item.encaminhamento_id}
                         title="Marcar como Concluído"

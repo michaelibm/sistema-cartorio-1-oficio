@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { getEncaminhamentosAtendimento } from '../services/api';
 
+const CARGOS_DEVOLUCAO = ['Atendente', 'Supervisor', 'Coordenador'];
 
 function Sidebar({ usuario, onLogout, onToggle }) {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [pendentesDevolucao, setPendentesDevolucao] = useState(0);
 
   // Comunica ao componente pai quando o estado muda
   useEffect(() => {
@@ -12,6 +15,28 @@ function Sidebar({ usuario, onLogout, onToggle }) {
       onToggle(isCollapsed);
     }
   }, [isCollapsed, onToggle]);
+
+  // Contador de protocolos pendentes de devolução (badge no menu)
+  useEffect(() => {
+    if (!CARGOS_DEVOLUCAO.includes(usuario?.cargo)) {
+      setPendentesDevolucao(0);
+      return;
+    }
+
+    let cancelado = false;
+    const carregarContagem = async () => {
+      try {
+        const res = await getEncaminhamentosAtendimento('pendente');
+        if (!cancelado) setPendentesDevolucao(Array.isArray(res) ? res.length : 0);
+      } catch {
+        // silencioso - badge apenas não atualiza neste ciclo
+      }
+    };
+
+    carregarContagem();
+    const intervalId = setInterval(carregarContagem, 60000);
+    return () => { cancelado = true; clearInterval(intervalId); };
+  }, [usuario?.cargo]);
 
   // Define itens do menu com permissões
   const menuItems = [
@@ -140,7 +165,8 @@ function Sidebar({ usuario, onLogout, onToggle }) {
 
         {filteredMenuItems.map((item) => {
           const active = isActive(item.path);
-          
+          const badgeCount = item.path === '/devolucao' ? pendentesDevolucao : 0;
+
           return (
             <Link
               key={item.path}
@@ -179,20 +205,61 @@ function Sidebar({ usuario, onLogout, onToggle }) {
               <span style={{
                 fontSize: '1.375rem',
                 lineHeight: 1,
-                opacity: active ? 1 : 0.85
+                opacity: active ? 1 : 0.85,
+                position: 'relative'
               }}>
                 {item.icon}
+                {isCollapsed && badgeCount > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '-6px',
+                    right: '-8px',
+                    minWidth: '16px',
+                    height: '16px',
+                    padding: '0 3px',
+                    borderRadius: '999px',
+                    background: '#ef4444',
+                    color: 'white',
+                    fontSize: '0.625rem',
+                    fontWeight: '700',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    lineHeight: 1
+                  }}>
+                    {badgeCount > 99 ? '99+' : badgeCount}
+                  </span>
+                )}
               </span>
-              
+
               {!isCollapsed && (
                 <>
-                  <span style={{ 
+                  <span style={{
                     flex: 1,
                     opacity: isCollapsed ? 0 : 1,
                     transition: 'opacity 0.3s ease'
                   }}>
                     {item.label}
                   </span>
+
+                  {badgeCount > 0 && (
+                    <span style={{
+                      minWidth: '20px',
+                      height: '20px',
+                      padding: '0 6px',
+                      borderRadius: '999px',
+                      background: '#ef4444',
+                      color: 'white',
+                      fontSize: '0.75rem',
+                      fontWeight: '700',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      lineHeight: 1
+                    }}>
+                      {badgeCount > 99 ? '99+' : badgeCount}
+                    </span>
+                  )}
 
                   {active && (
                     <div style={{
