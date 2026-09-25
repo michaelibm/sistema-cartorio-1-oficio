@@ -1,9 +1,26 @@
 # Deploy - Enviar para Atendimento / Devolução
 
 Guia para atualizar um servidor de produção com a feature "Enviar para
-Atendimento" (módulo Protocolo) + "Devolução" (módulo Atendimento) +
-correção do bug `nome_cliente`. Execute os passos na ordem, no servidor,
-dentro da pasta do projeto (onde está o `docker-compose.yml`).
+Atendimento" (módulo Protocolo) + "Devolução" (módulo Atendimento).
+Execute os passos na ordem, no servidor, dentro da pasta do projeto (onde
+está o `docker-compose.yml`).
+
+> Este arquivo é atualizado a cada mudança nesta feature - não crie um
+> `.md` novo para cada ajuste, edite este. O changelog abaixo mostra o que
+> já está incluído.
+
+## Changelog desta feature
+
+| Commit | O que mudou | Precisa de migration? |
+|---|---|---|
+| `776f1d9`..`8bbc648` | Enviar para Atendimento + aba Devolução (feature completa) | Sim - `008_encaminhamentos_atendimento.sql` |
+| `4530237` | Fix: rotas de Atendimento usavam coluna `p.nome_cliente` (inexistente) causando 500 na lista e na busca por localização | Não |
+| `68483f4` | Criação deste guia | - |
+| `ecf2278` | Fix: coluna "Ações" da tabela Devolução sumia em telas largas (agora sticky) + badge com contagem de pendentes no menu lateral | Não |
+
+Se o servidor já está atualizado até um desses commits, pule direto para
+o próximo `git pull` - as migrations continuam idempotentes e seguras de
+rodar de novo mesmo assim.
 
 ## 1. Backup antes de qualquer coisa
 
@@ -97,6 +114,10 @@ alguma migration não foi aplicada - repita o passo 3.
 6. Usar a busca "Com quem está o protocolo?" com o número do protocolo -
    deve retornar Protocolo, Status atual, Setor atual, Responsável atual,
    Última movimentação e Origem anterior.
+7. Com algum protocolo pendente de devolução, o menu lateral deve mostrar
+   um badge vermelho com a quantidade ao lado de "Devolução".
+8. Na tabela de "Protocolos Encaminhados", mesmo em telas largas, a coluna
+   "Ações" deve continuar visível (fixa à direita) sem precisar rolar.
 
 ## Observação - bug pré-existente não relacionado a esta feature
 
