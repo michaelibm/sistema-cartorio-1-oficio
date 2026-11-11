@@ -39,14 +39,28 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const { status, responsavel_id, busca } = req.query;
 
+    // Na fila (aguardando) mostramos quem criou o protocolo, a partir do registro
+    // CRIACAO do histórico. Só nessa consulta para não pesar nas listagens grandes.
+    const incluirCriador = status === 'aguardando';
+
     let query = `
       SELECT p.*, s.nome as servico_nome, s.prazo, s.tipo_prazo,
              u.nome as responsavel_nome, u.cargo as responsavel_cargo, u.setor as responsavel_setor,
              d.nome as devolvido_por_nome
+             ${incluirCriador ? ', criador.nome as criado_por_nome' : ''}
       FROM protocolos p
       JOIN servicos s ON p.servico_id = s.id
       JOIN usuarios u ON p.responsavel_id = u.id
       LEFT JOIN usuarios d ON p.devolvido_por_id = d.id
+      ${incluirCriador ? `
+      LEFT JOIN LATERAL (
+        SELECT uc.nome
+        FROM historico h
+        JOIN usuarios uc ON uc.id = h.usuario_id
+        WHERE h.protocolo_id = p.id AND h.acao = 'CRIACAO'
+        ORDER BY h.created_at ASC
+        LIMIT 1
+      ) criador ON true` : ''}
       WHERE 1=1
     `;
 

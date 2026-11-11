@@ -379,11 +379,28 @@ export default function FilaRegistrador({ usuario }) {
   );
 }
 
+function formatarDataHora(valor) {
+  if (!valor) return "";
+  const d = new Date(valor);
+  if (isNaN(d)) return "";
+  return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatarData(valor) {
+  if (!valor) return "";
+  const [a, m, d] = String(valor).slice(0, 10).split("-");
+  return a && m && d ? `${d}/${m}/${a}` : "";
+}
+
 function CardProtocolo({ p, selecionado, onToggle, onPuxar }) {
   const cfg = PRIORIDADE_CONFIG[p.prioridade] || PRIORIDADE_CONFIG[2];
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const entrada = new Date(p.data_entrada); entrada.setHours(0, 0, 0, 0);
   const diasNaFila = Math.ceil((hoje - entrada) / (1000 * 60 * 60 * 24));
+  const criadoEm = formatarDataHora(p.created_at) || formatarData(p.data_entrada);
+  // Protocolos antigos/importados podem não ter registro CRIACAO no histórico:
+  // nesse caso mostramos quem colocou na fila (responsável atual).
+  const criadoPor = p.criado_por_nome || p.responsavel_nome || "";
 
   return (
     <div onClick={onToggle} style={{
@@ -419,6 +436,12 @@ function CardProtocolo({ p, selecionado, onToggle, onPuxar }) {
           )}
         </div>
         <div style={{ fontSize: 13, color: "#64748b" }}>{p.servico_nome}</div>
+        {(criadoEm || criadoPor) && (
+          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+            📅 Criado{criadoEm && <> em <strong style={{ color: "#64748b", fontWeight: 600 }}>{criadoEm}</strong></>}
+            {criadoPor && <> por <strong style={{ color: "#64748b", fontWeight: 600 }}>{criadoPor}</strong></>}
+          </div>
+        )}
         {p.nome_cliente && <div style={{ fontSize: 13, color: "#374151", fontWeight: 500, marginTop: 2 }}>👤 {p.nome_cliente}</div>}
         {p.observacoes && (
           <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
