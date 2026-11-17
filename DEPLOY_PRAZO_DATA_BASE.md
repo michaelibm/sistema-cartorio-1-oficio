@@ -50,7 +50,13 @@ backup de dias atrás.
       Michael (seção 5). Muda os KPIs de "atrasados" retroativamente. Faça um novo backup
       antes, comece pelo protocolo 224854 (esperado 18/11 -> 23/11), depois lotes de 50.
       Protocolos puxados a partir do deploy já nascem corretos e não entram no recálculo.
-- [ ] 7. Depois do item 6, anotar aqui a data e a quantidade aplicada.
+- [x] 6a. **Protocolo 224854 recalculado em 17/11/2026** (autorizado pelo Michael): vencimento
+      18/11 -> 23/11, data-base 17/11, evento `RECALCULO_PRAZO` no histórico. Backup antes:
+      `~/backups_cartorio/backup_20261117_103102_antes_recalculo_224854.sql`. Repetir o comando
+      não altera mais nada (classe `ja_tem_data_base`).
+- [ ] 6b. Restante do recálculo (~175 protocolos): **ainda não autorizado**. Novo backup antes,
+      depois `--apply --limite 50` por lote, conferindo o CSV de cada simulação.
+- [ ] 7. Ao terminar o 6b, anotar aqui a data e a quantidade aplicada.
 
 ### Pendências de decisão / trabalho futuro (precisam do Michael)
 
