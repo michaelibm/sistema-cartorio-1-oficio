@@ -5,3 +5,7 @@ build/
 postgres_data/
 *.log
 .DS_Store
+
+# Simulacoes do recalculo de prazos (dados reais, nao versionar)
+recalculo-prazos-*.csv
+simulacao_recalculo_*.csv

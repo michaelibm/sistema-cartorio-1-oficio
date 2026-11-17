@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS public.protocolos
     devolvido_por_id integer,
     devolvido_em timestamp without time zone,
     situacao character varying(100) COLLATE pg_catalog."default",
+    prazo_base_data date,
     CONSTRAINT protocolos_pkey PRIMARY KEY (id),
     CONSTRAINT protocolos_numero_key UNIQUE (numero)
 );

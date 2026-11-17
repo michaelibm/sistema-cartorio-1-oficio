@@ -3,36 +3,15 @@ const router = express.Router();
 const pool = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 
-// Função para calcular data de vencimento considerando dias úteis
-async function calcularDataVencimento(dataEntrada, prazo, tipoPrazo) {
-  if (tipoPrazo === 'sem_prazo') return null;
-
-  let data = new Date(dataEntrada);
-  data.setHours(0, 0, 0, 0);
-
-  let diasAdicionados = 0;
-
-  const feriadosResult = await pool.query('SELECT data FROM feriados');
-  const feriados = feriadosResult.rows.map(f => f.data.toISOString().split('T')[0]);
-
-  while (diasAdicionados < prazo) {
-    data.setDate(data.getDate() + 1);
-
-    if (tipoPrazo === 'uteis') {
-      const diaSemana = data.getDay();
-      const dataStr = data.toISOString().split('T')[0];
-      const ehFeriado = feriados.includes(dataStr);
-
-      if (diaSemana !== 0 && diaSemana !== 6 && !ehFeriado) {
-        diasAdicionados++;
-      }
-    } else {
-      diasAdicionados++;
-    }
-  }
-
-  return data.toISOString().split('T')[0];
-}
+// Regra de prazo (data-base, dias úteis, feriados, fuso de Manaus) centralizada em
+// services/prazo-service.js - ver o cabeçalho daquele arquivo.
+const {
+  hojeManaus,
+  paraDataISO,
+  calcularDataVencimento,
+  iniciaNovaExecucao,
+  formatarDataBR,
+} = require('../services/prazo-service');
 
 // Listar todos os protocolos (com controle de permissões)
 router.get('/', authMiddleware, async (req, res) => {
@@ -415,8 +394,8 @@ router.post('/', authMiddleware, async (req, res) => {
     const statusVal = status || 'andamento';
 
     const result = await pool.query(
-      `INSERT INTO protocolos (numero, servico_id, responsavel_id, data_entrada, data_vencimento, observacoes, tem_orcamento, orcamento_valor, prioridade, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO protocolos (numero, servico_id, responsavel_id, data_entrada, data_vencimento, prazo_base_data, observacoes, tem_orcamento, orcamento_valor, prioridade, status)
+       VALUES ($1, $2, $3, $4, $5, $4, $6, $7, $8, $9, $10)
        RETURNING *`,
       [numero, servico_id, responsavel_id, data_entrada, data_vencimento, observacoes || nome_cliente || null, !!tem_orcamento, valorOrcamento, prioridadeVal, statusVal]
     );
@@ -473,37 +452,16 @@ router.put('/:id', authMiddleware, async (req, res) => {
       paramCount++;
     }
 
-    if (servico_id !== undefined || data_entrada !== undefined) {
-      const atual = await pool.query('SELECT servico_id, data_entrada FROM protocolos WHERE id = $1', [id]);
-      if (atual.rows.length === 0) {
-        return res.status(404).json({ message: 'Protocolo não encontrado' });
-      }
-      const servicoIdCalculo = servico_id !== undefined ? servico_id : atual.rows[0].servico_id;
-      const dataEntradaCalculo = data_entrada !== undefined ? data_entrada : atual.rows[0].data_entrada;
-
-      const servicoResult = await pool.query('SELECT prazo, tipo_prazo FROM servicos WHERE id = $1', [servicoIdCalculo]);
-      if (servicoResult.rows.length === 0) {
-        return res.status(404).json({ message: 'Serviço não encontrado' });
-      }
-      const servico = servicoResult.rows[0];
-      const novoVencimento = await calcularDataVencimento(dataEntradaCalculo, servico.prazo, servico.tipo_prazo);
-
-      if (servico_id !== undefined) {
-        updates.push(`servico_id = $${paramCount}`);
-        params.push(servico_id);
-        paramCount++;
-      }
-
-      if (data_entrada !== undefined) {
-        updates.push(`data_entrada = $${paramCount}`);
-        params.push(data_entrada);
-        paramCount++;
-      }
-
-      updates.push(`data_vencimento = $${paramCount}`);
-      params.push(novoVencimento);
-      paramCount++;
+    // Estado atual: base para decidir se esta edição inicia uma nova execução de
+    // serviço (novo prazo) ou é uma alteração comum (prazo intocado).
+    const atualRes = await pool.query(
+      'SELECT status, servico_id, data_entrada, prazo_base_data, responsavel_id FROM protocolos WHERE id = $1',
+      [id]
+    );
+    if (atualRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Protocolo não encontrado' });
     }
+    const atual = atualRes.rows[0];
 
     // statusFinal começa como o status enviado pelo cliente (pode ser undefined,
     // já que o modal de editar sempre envia o status atual, mesmo quando só o
@@ -511,9 +469,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
     let statusFinal = status;
 
     if (responsavel_id) {
-      const atualResp = await pool.query('SELECT status, responsavel_id FROM protocolos WHERE id = $1', [id]);
-      const statusAtual = atualResp.rows[0]?.status;
-      const responsavelMudou = Number(atualResp.rows[0]?.responsavel_id) !== Number(responsavel_id);
+      const statusAtual = atual.status;
+      const responsavelMudou = Number(atual.responsavel_id) !== Number(responsavel_id);
       const statusNaoFoiAlteradoPeloUsuario = status === undefined || status === statusAtual;
 
       // Reatribuir o responsável de um protocolo que ainda está "aguardando" na
@@ -532,6 +489,74 @@ router.put('/:id', authMiddleware, async (req, res) => {
       // etiqueta de situação (ex: "fechamento/digitalização"), já que alguém
       // assumiu o protocolo de novo.
       updates.push(`devolvido_por_id = NULL`, `devolvido_em = NULL`, `situacao = NULL`);
+    }
+
+    // ---- Serviço, data de entrada e PRAZO ----
+    // O modal de edição envia sempre servico_id e data_entrada, mesmo sem mudança:
+    // só mexe no prazo quando algo relevante realmente mudou.
+    //  - nova execução (sai de aguardando/concluído para andamento, ou o serviço
+    //    muda em andamento): o prazo conta de HOJE (America/Manaus);
+    //  - serviço/entrada mudou mas o protocolo ainda não foi puxado/distribuído
+    //    (a data-base ainda é a própria entrada): recalcula a partir da entrada;
+    //  - qualquer outra edição (observações, orçamento, status comum, troca de
+    //    responsável em andamento): vencimento e data-base ficam como estão.
+    let prazoNovo = null; // { dataBase, vencimento } quando o prazo é recalculado
+    let descricaoPrazo = '';
+    {
+      const entradaAtualISO = paraDataISO(atual.data_entrada);
+      const servicoMudou = servico_id !== undefined && Number(servico_id) !== Number(atual.servico_id);
+      const entradaMudou = data_entrada !== undefined && paraDataISO(data_entrada) !== entradaAtualISO;
+      const novaExecucao = iniciaNovaExecucao({
+        statusAtual: atual.status,
+        statusNovo: statusFinal || atual.status,
+        servicoAtualId: atual.servico_id,
+        servicoNovoId: servico_id,
+      });
+      const baseEhEntrada = !atual.prazo_base_data || paraDataISO(atual.prazo_base_data) === entradaAtualISO;
+
+      let dataBase = null;
+      if (novaExecucao) {
+        dataBase = hojeManaus();
+      } else if ((servicoMudou || entradaMudou) && baseEhEntrada) {
+        dataBase = paraDataISO(data_entrada !== undefined ? data_entrada : atual.data_entrada);
+      }
+
+      if (dataBase) {
+        const servicoIdCalculo = servico_id !== undefined ? servico_id : atual.servico_id;
+        const servicoResult = await pool.query('SELECT prazo, tipo_prazo FROM servicos WHERE id = $1', [servicoIdCalculo]);
+        if (servicoResult.rows.length === 0) {
+          return res.status(404).json({ message: 'Serviço não encontrado' });
+        }
+        const servico = servicoResult.rows[0];
+        const vencimento = await calcularDataVencimento(dataBase, servico.prazo, servico.tipo_prazo);
+        prazoNovo = { dataBase, vencimento };
+        if (novaExecucao) {
+          descricaoPrazo = vencimento
+            ? ` - prazo iniciado em ${formatarDataBR(dataBase)}, vencimento ${formatarDataBR(vencimento)}`
+            : ` - serviço sem prazo definido (iniciado em ${formatarDataBR(dataBase)})`;
+        }
+      }
+    }
+
+    if (servico_id !== undefined) {
+      updates.push(`servico_id = $${paramCount}`);
+      params.push(servico_id);
+      paramCount++;
+    }
+
+    if (data_entrada !== undefined) {
+      updates.push(`data_entrada = $${paramCount}`);
+      params.push(data_entrada);
+      paramCount++;
+    }
+
+    if (prazoNovo) {
+      updates.push(`data_vencimento = $${paramCount}`);
+      params.push(prazoNovo.vencimento);
+      paramCount++;
+      updates.push(`prazo_base_data = $${paramCount}`);
+      params.push(prazoNovo.dataBase);
+      paramCount++;
     }
 
     if (observacoes !== undefined) {
@@ -593,7 +618,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
 
     await pool.query(
       'INSERT INTO historico (protocolo_id, usuario_id, acao, descricao) VALUES ($1, $2, $3, $4)',
-      [id, req.user.id, 'ATUALIZACAO', `Protocolo atualizado por ${req.user.email}`]
+      [id, req.user.id, 'ATUALIZACAO', `Protocolo atualizado por ${req.user.email}${descricaoPrazo}`]
     );
 
     res.json(result.rows[0]);
@@ -821,27 +846,33 @@ router.post('/:id/adicionar-servico', authMiddleware, async (req, res) => {
     );
 
     let novaData = protocolo.data_vencimento
-      ? new Date(protocolo.data_vencimento).toISOString().split('T')[0]
+      ? paraDataISO(protocolo.data_vencimento)
       : null;
 
     if (renovarPrazo) {
-      const hoje = new Date().toISOString().split('T')[0];
+      const hoje = hojeManaus();
       const recalculada = await calcularDataVencimento(
         hoje,
         servico.prazo,
-        servico.tipo_prazo
-       );
+        servico.tipo_prazo,
+        client
+      );
 
+      let adotouRecalculo = false;
       if (recalculada === null || novaData === null) {
         // Novo serviço sem prazo, ou protocolo ainda sem data de vencimento:
         // adota o resultado do recálculo (que pode ser null, quando o serviço é "sem prazo").
         novaData = recalculada;
-      } else {
-        const dataAtual = new Date(novaData);
-        const dataRecalculada = new Date(recalculada);
-        novaData = (dataRecalculada > dataAtual) ? recalculada : novaData;
+        adotouRecalculo = true;
+      } else if (recalculada > novaData) {
+        // Datas ISO (YYYY-MM-DD) comparam corretamente como texto.
+        novaData = recalculada;
+        adotouRecalculo = true;
       }
-      await client.query('UPDATE protocolos SET data_vencimento = $1 WHERE id = $2', [novaData, id]);
+      if (adotouRecalculo) {
+        // O vencimento passou a vir do novo serviço: a data-base é hoje.
+        await client.query('UPDATE protocolos SET data_vencimento = $1, prazo_base_data = $2 WHERE id = $3', [novaData, hoje, id]);
+      }
     }
 
     await client.query(
@@ -1099,8 +1130,16 @@ router.get('/dashboard/stats', authMiddleware, async (req, res) => {
   }
 });
 
-// Transferir responsável
+// Transferir responsável - é também a rota da PUXADA (pela fila) e da DISTRIBUIÇÃO.
+//
+// Prazo: quando a transferência inicia uma nova execução de serviço (protocolo
+// sai de aguardando/concluído para andamento, ou o serviço executado muda), o
+// prazo passa a contar de HOJE (America/Manaus) - ver services/prazo-service.js.
+// Trocar só o responsável de um protocolo que já está em andamento no mesmo
+// serviço NÃO renova o prazo, e repetir a requisição também não (a segunda
+// chamada já encontra o protocolo em andamento).
 router.post('/:id/transferir', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { novo_responsavel_id, servico_id } = req.body;
@@ -1109,78 +1148,127 @@ router.post('/:id/transferir', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Novo responsável é obrigatório' });
     }
 
-    const protocolo = await pool.query(
-      'SELECT id, numero, responsavel_id, status, data_entrada FROM protocolos WHERE id = $1',
+    await client.query('BEGIN');
+
+    // FOR UPDATE: duas requisições simultâneas (duplo clique, dois registradores
+    // puxando o mesmo protocolo) são serializadas; a segunda já vê "andamento".
+    const protocolo = await client.query(
+      'SELECT id, numero, responsavel_id, status, servico_id, data_entrada FROM protocolos WHERE id = $1 FOR UPDATE',
       [id]
     );
     if (!protocolo.rows.length) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Protocolo não encontrado' });
     }
-    const statusAtual = protocolo.rows[0].status;
+    const p = protocolo.rows[0];
+    const statusAtual = p.status;
     const statusPermitidos = ['andamento', 'aguardando', 'concluido', 'concluido_parcial'];
     if (!statusPermitidos.includes(statusAtual)) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Só é possível transferir protocolos em andamento, aguardando ou concluídos' });
     }
     const reabrindo = statusAtual === 'concluido' || statusAtual === 'concluido_parcial';
 
-    const responsavelAtual = await pool.query('SELECT nome FROM usuarios WHERE id = $1', [protocolo.rows[0].responsavel_id]);
-    const novoResponsavel = await pool.query('SELECT nome, setor FROM usuarios WHERE id = $1 AND ativo = true', [novo_responsavel_id]);
+    const responsavelAtual = await client.query('SELECT nome FROM usuarios WHERE id = $1', [p.responsavel_id]);
+    const novoResponsavel = await client.query('SELECT nome, setor FROM usuarios WHERE id = $1 AND ativo = true', [novo_responsavel_id]);
 
     if (!novoResponsavel.rows.length) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Novo responsável não encontrado' });
     }
 
     // Ao puxar da fila, o registrador pode definir o serviço real que irá executar
     // (o serviço escolhido pelo atendimento costuma ser só uma categoria de triagem).
+    const servicoInformado = servico_id ? Number(servico_id) : null;
+
+    // Toda transferência permitida deixa o protocolo em "andamento" (ver CASE no UPDATE).
+    const novaExecucao = iniciaNovaExecucao({
+      statusAtual,
+      statusNovo: 'andamento',
+      servicoAtualId: p.servico_id,
+      servicoNovoId: servicoInformado,
+    });
+
     let servicoNome = null;
-    if (servico_id) {
-      const servicoResult = await pool.query('SELECT id, nome, prazo, tipo_prazo FROM servicos WHERE id = $1', [servico_id]);
+    let nomeServicoPrazo = null;
+    let dataBase = null;
+    let novaDataVencimento = null;
+
+    const sets = ['responsavel_id = $1'];
+    const params = [novo_responsavel_id];
+
+    if (servicoInformado) {
+      const servicoResult = await client.query('SELECT id, nome, prazo, tipo_prazo FROM servicos WHERE id = $1', [servicoInformado]);
       if (!servicoResult.rows.length) {
+        await client.query('ROLLBACK');
         return res.status(404).json({ message: 'Serviço não encontrado' });
       }
+      servicoNome = servicoResult.rows[0].nome;
+      sets.push(`servico_id = $${params.push(servicoInformado)}`);
+      if (novaExecucao) {
+        const s = servicoResult.rows[0];
+        nomeServicoPrazo = s.nome;
+        dataBase = hojeManaus();
+        novaDataVencimento = await calcularDataVencimento(dataBase, s.prazo, s.tipo_prazo, client);
+      }
+    } else if (novaExecucao) {
+      // Puxada sem escolher serviço: o prazo é o do serviço que o protocolo já tem.
+      const servicoResult = await client.query('SELECT nome, prazo, tipo_prazo FROM servicos WHERE id = $1', [p.servico_id]);
       const s = servicoResult.rows[0];
-      servicoNome = s.nome;
-      const novaDataVencimento = await calcularDataVencimento(protocolo.rows[0].data_entrada, s.prazo, s.tipo_prazo);
-
-      await pool.query(
-        `UPDATE protocolos
-         SET responsavel_id = $1, servico_id = $2, data_vencimento = $3,
-             status = CASE WHEN status IN ('aguardando', 'concluido', 'concluido_parcial') THEN 'andamento' ELSE status END,
-             data_conclusao = CASE WHEN status IN ('concluido', 'concluido_parcial') THEN NULL ELSE data_conclusao END,
-             devolvido_por_id = NULL, devolvido_em = NULL, situacao = NULL,
-             updated_at = NOW()
-         WHERE id = $4`,
-        [novo_responsavel_id, servico_id, novaDataVencimento, id]
-      );
-    } else {
-      await pool.query(
-        `UPDATE protocolos
-         SET responsavel_id = $1,
-             status = CASE WHEN status IN ('aguardando', 'concluido', 'concluido_parcial') THEN 'andamento' ELSE status END,
-             data_conclusao = CASE WHEN status IN ('concluido', 'concluido_parcial') THEN NULL ELSE data_conclusao END,
-             devolvido_por_id = NULL, devolvido_em = NULL, situacao = NULL,
-             updated_at = NOW()
-         WHERE id = $2`,
-        [novo_responsavel_id, id]
-      );
+      nomeServicoPrazo = s.nome;
+      dataBase = hojeManaus();
+      novaDataVencimento = await calcularDataVencimento(dataBase, s.prazo, s.tipo_prazo, client);
     }
+
+    if (novaExecucao) {
+      sets.push(`data_vencimento = $${params.push(novaDataVencimento)}`);
+      sets.push(`prazo_base_data = $${params.push(dataBase)}`);
+    }
+
+    await client.query(
+      `UPDATE protocolos
+       SET ${sets.join(', ')},
+           status = CASE WHEN status IN ('aguardando', 'concluido', 'concluido_parcial') THEN 'andamento' ELSE status END,
+           data_conclusao = CASE WHEN status IN ('concluido', 'concluido_parcial') THEN NULL ELSE data_conclusao END,
+           devolvido_por_id = NULL, devolvido_em = NULL, situacao = NULL,
+           updated_at = NOW()
+       WHERE id = $${params.length + 1}`,
+      [...params, id]
+    );
 
     const nomeAtual = responsavelAtual.rows[0]?.nome || 'Desconhecido';
     const nomeNovo = novoResponsavel.rows[0]?.nome || 'Desconhecido';
     const prefixo = reabrindo ? 'Protocolo reaberto e transferido' : 'Protocolo transferido';
-    const descricao = servicoNome
+    // Atenção: o trecho 'serviço definido como "..."' é lido por
+    // scripts/recalcular-prazos-puxada.js para reconstruir a data da puxada.
+    let descricao = servicoNome
       ? `${prefixo} de ${nomeAtual} para ${nomeNovo}, serviço definido como "${servicoNome}"`
       : `${prefixo} de ${nomeAtual} para ${nomeNovo}`;
-    await pool.query(
+    if (novaExecucao) {
+      descricao += novaDataVencimento
+        ? ` - prazo do serviço "${nomeServicoPrazo}" iniciado em ${formatarDataBR(dataBase)}, vencimento ${formatarDataBR(novaDataVencimento)}`
+        : ` - serviço "${nomeServicoPrazo}" sem prazo definido (iniciado em ${formatarDataBR(dataBase)})`;
+    }
+    await client.query(
       `INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at)
        VALUES ($1, $2, 'transferencia', $3, NOW())`,
       [id, req.user.id, descricao]
     );
 
-    res.json({ message: 'Protocolo transferido com sucesso' });
+    await client.query('COMMIT');
+
+    res.json({
+      message: 'Protocolo transferido com sucesso',
+      novo_prazo: novaExecucao,
+      prazo_base_data: dataBase,
+      data_vencimento: novaDataVencimento,
+    });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Erro ao transferir protocolo:', error);
     res.status(500).json({ message: 'Erro ao transferir protocolo' });
+  } finally {
+    client.release();
   }
 });
 
@@ -1249,7 +1337,7 @@ router.post('/:id/transferir-arquivo', authMiddleware, async (req, res) => {
     }
 
     const protocolo = await pool.query(
-      'SELECT id, numero, responsavel_id, status, data_entrada FROM protocolos WHERE id = $1',
+      'SELECT id, numero, responsavel_id, status, servico_id, data_entrada FROM protocolos WHERE id = $1',
       [id]
     );
     if (!protocolo.rows.length) {
@@ -1282,21 +1370,28 @@ router.post('/:id/transferir-arquivo', authMiddleware, async (req, res) => {
     const s = servicoArquivo.rows[0];
 
     const responsavelAtual = await pool.query('SELECT nome FROM usuarios WHERE id = $1', [p.responsavel_id]);
+    // Requisição repetida: já está no Arquivo, no mesmo serviço e em andamento -
+    // não reinicia o prazo que já foi iniciado.
+    if (p.status === 'andamento' && Number(p.servico_id) === Number(s.id) && Number(p.responsavel_id) === Number(destino.id)) {
+      return res.json({ message: 'Protocolo já está no Arquivo' });
+    }
+
     // Prazo do Arquivo conta a partir de hoje (quando chega pra eles), não da
     // data de entrada original do protocolo - senão já nasce vencido.
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = hojeManaus();
     const novaDataVencimento = await calcularDataVencimento(hoje, s.prazo, s.tipo_prazo);
 
     await pool.query(
       `UPDATE protocolos
        SET responsavel_id = $1, servico_id = $2, data_vencimento = $3,
+           prazo_base_data = $6,
            situacao = $4,
            status = CASE WHEN status IN ('aguardando', 'concluido', 'concluido_parcial') THEN 'andamento' ELSE status END,
            data_conclusao = CASE WHEN status IN ('concluido', 'concluido_parcial') THEN NULL ELSE data_conclusao END,
            devolvido_por_id = NULL, devolvido_em = NULL,
            updated_at = NOW()
        WHERE id = $5`,
-      [destino.id, s.id, novaDataVencimento, 'fechamento/digitalização', id]
+      [destino.id, s.id, novaDataVencimento, 'fechamento/digitalização', id, hoje]
     );
 
     await pool.query(
@@ -1415,7 +1510,7 @@ router.post('/:id/reabrir', authMiddleware, async (req, res) => {
     }
     const s = servico.rows[0];
 
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = hojeManaus();
     const novaDataVencimento = await calcularDataVencimento(hoje, s.prazo, s.tipo_prazo);
 
     await pool.query(
@@ -1424,6 +1519,7 @@ router.post('/:id/reabrir', authMiddleware, async (req, res) => {
            responsavel_id = $2,
            servico_id = $3,
            data_entrada = $4,
+           prazo_base_data = $4,
            data_vencimento = $5,
            data_conclusao = NULL,
            updated_at = NOW()

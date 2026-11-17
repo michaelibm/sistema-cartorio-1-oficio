@@ -1,0 +1,22 @@
+-- Coluna "prazo_base_data": data-base do prazo da execucao ATUAL do servico.
+--
+-- Regra: o prazo de um servico conta a partir do dia em que o protocolo e
+-- puxado da fila ou distribuido para a execucao daquele servico - nao da data
+-- de entrada (protocolos.data_entrada continua sendo o recebimento original).
+-- protocolos.data_vencimento continua sendo a unica data que telas, filtros,
+-- relatorios e alertas leem; esta coluna registra de onde ele foi calculado.
+--
+-- Registros antigos ficam com NULL = "data-base nao registrada" (nao e
+-- preenchida por chute). Para recuperar a data real a partir do historico, use
+-- backend/scripts/recalcular-prazos-puxada.js (simulacao por padrao).
+--
+-- ATENCAO: o codigo novo grava esta coluna. Aplique esta migration ANTES de
+-- subir o backend novo, senao puxar/distribuir protocolos retorna erro 500
+-- (column "prazo_base_data" does not exist).
+--
+-- Execute manualmente no banco ja existente:
+--   cat backend/migrations/009_prazo_base_data.sql | docker compose exec -T postgres psql -U postgres -d cartorio_db
+--
+-- Idempotente: pode ser executado mais de uma vez sem erro.
+
+ALTER TABLE protocolos ADD COLUMN IF NOT EXISTS prazo_base_data date;
