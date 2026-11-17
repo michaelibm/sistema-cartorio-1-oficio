@@ -87,7 +87,16 @@ O frontend **não** foi reconstruído (memória apertada; ele não é necessári
       atrasados; deslocamento de -1 a +178 dias porque há fila parada desde maio), 84 só registram
       a data-base, 95 sem prazo, 17 análise manual e **331 sem serviço no evento** (puxadas sem
       escolher serviço; sem prova de origem, não corrigíveis automaticamente).
-- [ ] Recálculo no 6RI: **aguardando autorização do Michael** (backup antes; lotes de 50).
+- [x] **Recálculo dos recentes no 6RI aplicado em 17/11/2026** (autorizado): puxados desde 11/11
+      (`--desde 2026-11-11`), 187 protocolos em 4 lotes de 50 (141 mudaram de vencimento, 46 só
+      registraram a data-base), 0 pulados; 89 deles apareciam como vencidos e nenhum aparece agora.
+      Backup antes: `backup_6ri_20261117_113748_antes_recalculo_recentes.sql`; valores anteriores em
+      `recentes_antes_20261117.csv` (`/root/backups_cartorio/`) e no evento `RECALCULO_PRAZO`.
+      Rollback do backend: `sistema-cartorio-backend:rollback-desde`.
+- [ ] **Falta no 6RI (não autorizado):** 263 protocolos que mudam de vencimento (259 já vencidos
+      hoje) + 36 que só registram a data-base, todos puxados antes de 11/11. Comando, por lotes:
+      `docker exec cartorio-backend node scripts/recalcular-prazos-puxada.js --apply --limite 50`
+      (backup novo antes).
 - [ ] Decidir os 331 "puxada sem serviço no evento" (maioria Registro de Imóvel).
 - [ ] Pendências do 6RI fora desta correção: faltam feriados de 2027; a tabela `protocolo_sessoes`
       não existe no banco (Iniciar/Pausar sessão devem dar erro 500); o fuso do servidor é -03 e o
