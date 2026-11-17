@@ -27,21 +27,30 @@ backup de dias atrás.
 - [x] Testado na interface no Docker local (puxar na Fila -> vencimento 23/11 no caso do 224854).
 - [x] Simulação **somente leitura** em produção em 17/11/2026 (nada foi gravado; ver seção 4).
 
-### NÃO feito - nada disso foi executado em produção
+### Implantado em produção em 17/11/2026 (servidor do 1º Ofício)
 
-Produção (192.168.0.95) ainda roda o código **anterior** a esta correção e **não
-tem** a coluna `prazo_base_data`. Quem for fazer o deploy executa, nesta ordem:
+- [x] 1. Backup: `~/backups_cartorio/backup_20261117_102624_antes_prazo.sql` (8,7 MB, 15 tabelas,
+      7.584 protocolos; cópia na máquina do Michael) + tags de rollback `:rollback-prazo`
+      nas imagens backend e frontend + commit anterior em `commit_antes_prazo.txt`.
+- [x] 2. Migration 009 aplicada (coluna `prazo_base_data`, 0 registros preenchidos).
+- [x] 3. `git pull` (merge `e92759e`, sem conflito, personalizações do 1º Ofício preservadas)
+      e rebuild **só do backend**. Frontend não mudou.
+- [x] 4. Verificação: backend sem erros no log, frontend HTTP 200, API 401 sem token,
+      testes unitários passando dentro do container de produção (Node 18).
+      Não foi feito teste autenticado em produção (sem criar protocolo de teste lá):
+      **conferir com um usuário real** na primeira puxada do dia (seção 6).
+- [x] 5. Simulação do recálculo (somente leitura): 913 em andamento, 669 sem prazo,
+      **176 mudam de vencimento** (27 já vencidos pelo valor atual), 17 só registram a
+      data-base, 46 para análise manual. CSV no servidor:
+      `~/backups_cartorio/sim_pos_deploy_20261117.csv`.
 
-- [ ] 1. Backup do banco + tag de rollback das imagens (seção 1). **Obrigatório.**
-- [ ] 2. Aplicar a migration 009 **antes** do código (seção 2).
-- [ ] 3. `git pull` + `docker compose up -d --build backend` (seção 3). Frontend não muda.
-- [ ] 4. Smoke test (seção 6).
-- [ ] 5. Rodar a simulação de novo (seção 4) - os números mudam com o tempo - e
-      mostrar o resumo ao Michael.
-- [ ] 6. **Só com autorização explícita do Michael**: aplicar o recálculo, gradual
-      (seção 5). Corrigir muda os KPIs de "atrasados" retroativamente. Primeiro o
-      protocolo 224854 (esperado: 18/11 -> 23/11), depois lotes.
-- [ ] 7. Atualizar o changelog deste arquivo com o commit implantado e a data.
+### Ainda NÃO feito em produção
+
+- [ ] 6. **Aplicar o recálculo dos protocolos antigos** - só com autorização explícita do
+      Michael (seção 5). Muda os KPIs de "atrasados" retroativamente. Faça um novo backup
+      antes, comece pelo protocolo 224854 (esperado 18/11 -> 23/11), depois lotes de 50.
+      Protocolos puxados a partir do deploy já nascem corretos e não entram no recálculo.
+- [ ] 7. Depois do item 6, anotar aqui a data e a quantidade aplicada.
 
 ### Pendências de decisão / trabalho futuro (precisam do Michael)
 
