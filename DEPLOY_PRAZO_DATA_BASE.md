@@ -119,9 +119,12 @@ e disco vazio (dá para reconstruir o frontend). Mesmo código dos outros (merge
       `sistema-cartorio-backend:rollback-prazo`, migration 009 (2.598 protocolos, coluna vazia),
       merge `8b41e6b`, site público 200, API 401 sem token, testes unitários OK no container.
       Frontend não reconstruído. Simulação pós-deploy: `antes_recalculo_20261117.csv`.
-- [ ] Recálculo no 4RI: **aguardando autorização**. 86 aplicáveis: 47 mudam de vencimento + 39 só
-      registram a data-base; 77 deles puxados desde 11/11 (`--desde 2026-11-11`) e 9 anteriores.
-      Backup novo antes; `docker exec cartorio-backend node scripts/recalcular-prazos-puxada.js --apply --limite 50`.
+- [x] **Recálculo do 4RI aplicado em 17/11/2026** (autorizado): 86 protocolos em 2 lotes (50 + 36), 0 pulados
+      (47 mudaram de vencimento, 39 só registraram a data-base). Backup antes:
+      `backup_4ri_20261117_114834_antes_recalculo.sql`; valores anteriores em `antes_recalculo_20261117.csv`
+      (`/root/backups_cartorio/`) e no evento `RECALCULO_PRAZO`. Vencidos em andamento: 30 -> 21.
+      Ficam de propósito: 91 com movimentação posterior (90 "adicionar serviço"), 32 com vencimento
+      vazio, 28 de reabertura/Arquivo/nunca puxados.
 - [ ] Melhoria possível do script (não feita): corrigir também as reaberturas e transferências para o
       Arquivo (o evento dá a data exata e o vencimento gravado é o da contagem antiga a partir dela):
       4RI 25+, 1RI 3, e avaliar os 32 "vencimento vazio".
