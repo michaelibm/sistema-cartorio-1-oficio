@@ -51,6 +51,17 @@ própria (veja o padrão em `situacao` e em
 `protocolo_encaminhamentos_atendimento`, que tem seu próprio `status`
 interno `pendente`/`concluido`, desacoplado de `protocolos.status`).
 
+## Regra crítica: prazo do serviço
+
+O prazo conta da **puxada/distribuição**, não da `data_entrada`. Toda a regra
+(dias úteis, feriados, fuso de Manaus, quando uma mudança inicia um novo prazo)
+vive em `backend/services/prazo-service.js` - **não recalcule vencimento em
+outro lugar** nem use `new Date().toISOString()` como "hoje" (é dia UTC; use
+`hojeManaus()`). `protocolos.prazo_base_data` guarda a data-base da execução
+atual; `data_vencimento` continua sendo o que telas/relatórios/alertas leem.
+Detalhes, migration 009 e script de recálculo em
+[DEPLOY_PRAZO_DATA_BASE.md](DEPLOY_PRAZO_DATA_BASE.md). Testes: `cd backend && npm test`.
+
 ## Migrations
 
 - Ficam em `backend/migrations/*.sql`, numeradas sequencialmente.
@@ -120,6 +131,7 @@ confirmando com o usuário antes, é uma escrita destrutiva no banco.
 - [PAINEL_API.md](PAINEL_API.md) - API anônima consumida pela tela de TV e pelo painel externo da Corregedoria.
 - [PRODUTIVIDADE_API.md](PRODUTIVIDADE_API.md) - API de produtividade com nome, para integrações externas.
 - [DEPLOY_ATENDIMENTO.md](DEPLOY_ATENDIMENTO.md) - guia de deploy vivo da feature Atendimento/Devolução (ver regra acima).
+- [DEPLOY_PRAZO_DATA_BASE.md](DEPLOY_PRAZO_DATA_BASE.md) - guia de deploy vivo da correção do prazo (data-base na puxada/distribuição), com migration 009 e script de recálculo.
 - [APRESENTACAO_SISTEMA.md](APRESENTACAO_SISTEMA.md) - prompt pronto para gerar uma apresentação/slides do sistema em outra IA.
 - Este arquivo (`AGENTS.md`) - handoff entre agentes/máquinas.
 
