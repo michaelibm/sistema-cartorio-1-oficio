@@ -21,6 +21,8 @@
 //   --numero <n>     restringe a um protocolo
 //   --limite <n>     com --apply, corrige no máximo n protocolos (lote gradual)
 //   --classe <c>     com --apply, só aplica a essa classe do relatório (ex.: corrigir_contagem_dia_base)
+//   --desde <data>   com --apply, só aplica a protocolos puxados/distribuídos a partir dessa
+//                    data AAAA-MM-DD (dia civil de Manaus), ex.: --desde 2026-11-11
 //   --saida <arq>    caminho do CSV (padrão: ./recalculo-prazos-<data-hora>.csv)
 //
 // EVIDÊNCIA usada (nada é chutado):
@@ -49,6 +51,11 @@ const APLICAR = args.includes('--apply');
 const NUMERO = opt('--numero');
 const LIMITE = opt('--limite') ? Number(opt('--limite')) : Infinity;
 const CLASSE = opt('--classe');
+const DESDE = opt('--desde');
+if (DESDE && !/^\d{4}-\d{2}-\d{2}$/.test(DESDE)) {
+  console.error('--desde precisa estar no formato AAAA-MM-DD');
+  process.exit(1);
+}
 const agora = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
 const SAIDA = opt('--saida') || `recalculo-prazos-${agora}.csv`;
 
@@ -203,6 +210,7 @@ async function main() {
   const alvo = itens
     .filter((i) => i.classe === CLASSES.CORRIGIR || i.classe === CLASSES.CORRIGIR_CONTAGEM || i.classe === CLASSES.REGISTRAR_BASE)
     .filter((i) => !CLASSE || i.classe === CLASSE)
+    .filter((i) => !DESDE || (i.data_base_proposta && i.data_base_proposta >= DESDE))
     .slice(0, LIMITE);
   console.log(`\nAPLICANDO em ${alvo.length} protocolo(s) (corrigir + registrar data-base)...`);
 

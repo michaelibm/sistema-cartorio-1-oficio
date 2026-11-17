@@ -110,6 +110,13 @@ test('script de recálculo: classifica, simula sem gravar, aplica uma vez só', 
     assert.equal(sim[G.numero].classe, 'analisar_ultima_movimentacao_alterou_prazo');
     for (const f of todos) assert.deepEqual(await estado(f.id), antes[f.numero], `simulação não pode gravar (${f.numero})`);
 
+    // ---- --desde: só puxados a partir da data; nenhum fixture foi puxado em 18/11 ou depois ----
+    rodar('--apply', '--desde', '2026-11-18');
+    for (const x of todos) assert.deepEqual(await estado(x.id), antes[x.numero], '--desde 2026-11-18 não podia alterar ' + x.numero);
+    // data inválida é recusada (não pode aplicar "tudo" por engano)
+    assert.throws(() => rodar('--apply', '--desde', 'ontem'));
+    for (const x of todos) assert.deepEqual(await estado(x.id), antes[x.numero], 'data inválida não podia alterar ' + x.numero);
+
     // ---- --classe: corrige só quem já tinha data-base gravada (como o 224854) e não toca nos antigos ----
     rodar('--apply', '--classe', 'corrigir_contagem_dia_base');
     assert.deepEqual(await estado(E.id), { venc: '2026-11-19', base: '2026-11-17' }); // 23/11 -> 19/11, data-base preservada
