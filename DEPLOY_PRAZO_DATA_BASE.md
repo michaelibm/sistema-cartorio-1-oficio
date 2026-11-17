@@ -56,15 +56,21 @@ backup de dias atrás.
       `backup_20261117_104908_antes_contagem_dia_base.sql` (em `~/backups_cartorio/`). Dois eventos
       `RECALCULO_PRAZO` no histórico guardam os valores anteriores.
 - [x] 6a2. Regra "dia-base conta como dia 1" implantada no backend de produção (commit `e6d0905`).
-- [ ] 6b. **Outros 8 protocolos puxados hoje pelo código intermediário** (224832, 224860, 224865,
-      224866, 224872, 224874, 224887, 224896; Nota Devolutiva/Orçamento, vencimento 25/11 -> 24/11):
-      aguardando autorização do Michael. Comando (só toca essa classe, não os antigos):
-      `docker compose exec backend node scripts/recalcular-prazos-puxada.js --apply --classe corrigir_contagem_dia_base`
-- [ ] 6c. Restante do recálculo (protocolos puxados antes da correção). Simulação de 17/11 já com a
-      regra nova: 919 em andamento, 669 sem prazo, **34 mudam de vencimento** (classe `corrigir`),
-      **157 só registram a data-base** (o vencimento já bate), 45 para análise manual. **Ainda não
-      autorizado.** Novo backup antes, depois `--apply --limite 50` por lote, conferindo o CSV.
-- [ ] 7. Ao terminar o 6c, anotar aqui a data e a quantidade aplicada.
+- [x] 6b+6c. **Recálculo geral aplicado em 17/11/2026** (autorizado pelo Michael), com backup antes
+      (`backup_20261117_110848_antes_recalculo_geral.sql`): 8 protocolos puxados pelo código
+      intermediário (25/11 -> 24/11) + 187 antigos em 4 lotes de 50 (34 mudaram de vencimento, 153
+      só registraram a data-base). 0 pulados. Total: 196 protocolos / 197 eventos `RECALCULO_PRAZO`.
+      Valores anteriores: CSVs `etapa1_20261117.csv` e `etapa2_antes_20261117.csv` em
+      `~/backups_cartorio/` do servidor, e o evento no histórico de cada protocolo. Simulação final:
+      0 protocolos a corrigir.
+- [x] 7. Concluído em 17/11/2026 (ver 6a, 6b e 6c).
+
+**Sobraram sem recálculo, de propósito (decidir caso a caso com o Michael):** 45 protocolos de
+análise manual (43 cuja última movimentação do histórico — edição ou serviço adicionado — pode
+ter alterado o prazo depois da puxada, e 2 puxados sem serviço no evento, sem prova de que foi
+puxada da fila) e 4 que vieram de reabertura, Arquivo ou nunca foram puxados (gravados com a
+contagem antiga a partir de "hoje"/entrada, podem estar 1 dia útil à frente). Listados na coluna
+`classe` do CSV `etapa2_antes_20261117.csv`.
 
 ### Pendências de decisão / trabalho futuro (precisam do Michael)
 
