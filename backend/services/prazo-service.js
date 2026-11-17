@@ -6,8 +6,12 @@
 // entrada. A data de entrada continua sendo o recebimento original; a data-base
 // da execução atual fica em protocolos.prazo_base_data.
 //
-// CONVENÇÃO DE CONTAGEM (inalterada, só foi extraída para cá):
-//   - o dia-base NÃO conta; a contagem começa no dia seguinte;
+// CONVENÇÃO DE CONTAGEM (definida pelo cartório em 17/11/2026):
+//   - o dia-base CONTA como dia 1 (se for dia útil, no caso de prazo "uteis").
+//     Ex.: puxado na terça 17/11, 3 dias úteis = 17, 18 e 19 -> vence 19/11;
+//   - até 17/11/2026 o sistema NÃO contava o dia-base (começava no dia seguinte).
+//     Valores gravados nessa época seguem a contagem antiga; só o script de
+//     recálculo as reconhece (opção contarDiaBase: false);
 //   - em prazo "uteis" pulam-se sábados, domingos e datas da tabela feriados;
 //   - em prazo "corridos" todos os dias contam;
 //   - o resultado é uma DATE: o serviço vence ao fim desse dia (só fica atrasado
@@ -52,12 +56,20 @@ function formatarDataBR(valor) {
 }
 
 // Cálculo puro (sem banco): feriados é uma lista de datas (string ou Date).
-function calcularVencimento(dataBase, prazo, tipoPrazo, feriados = []) {
+// contarDiaBase=false reproduz a contagem ANTIGA (dia-base fora); use só para
+// reconhecer vencimentos gravados antes de 17/11/2026, nunca para calcular novos.
+function calcularVencimento(dataBase, prazo, tipoPrazo, feriados = [], { contarDiaBase = true } = {}) {
   if (tipoPrazo === 'sem_prazo') return null;
 
   const [a, m, d] = paraDataISO(dataBase).split('-').map(Number);
   const dia = new Date(Date.UTC(a, m - 1, d));
   const ehFeriado = new Set(feriados.map(paraDataISO));
+
+  // Sem prazo numérico (ou zero): vence no próprio dia-base.
+  if (!(prazo > 0)) return dia.toISOString().slice(0, 10);
+
+  // Contar o dia-base como dia 1 equivale a começar a contagem na véspera.
+  if (contarDiaBase) dia.setUTCDate(dia.getUTCDate() - 1);
 
   let diasAdicionados = 0;
   while (diasAdicionados < prazo) {

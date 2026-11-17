@@ -15,44 +15,50 @@ const {
 // Feriados de novembro/2026 cadastrados na serventia.
 const FERIADOS = ['2026-11-02', '2026-11-15', '2026-11-20'];
 
-test('caso relatado (protocolo 224854): 3 dias úteis a partir da puxada em 17/11 vencem em 23/11', () => {
-  // 17/11 (ter) -> 18 (1) -> 19 (2) -> 20 feriado -> 21 sáb -> 22 dom -> 23 seg (3)
-  assert.equal(calcularVencimento('2026-11-17', 3, 'uteis', FERIADOS), '2026-11-23');
+const ANTIGA = { contarDiaBase: false };
+
+test('caso relatado (protocolo 224854): puxado em 17/11, 3 dias úteis = 17, 18 e 19 -> vence 19/11', () => {
+  assert.equal(calcularVencimento('2026-11-17', 3, 'uteis', FERIADOS), '2026-11-19');
 });
 
-test('o cálculo antigo (a partir da entrada 13/11) dava 18/11 - o valor errado em produção', () => {
-  assert.equal(calcularVencimento('2026-11-13', 3, 'uteis', FERIADOS), '2026-11-18');
-  assert.notEqual(
-    calcularVencimento('2026-11-13', 3, 'uteis', FERIADOS),
-    calcularVencimento('2026-11-17', 3, 'uteis', FERIADOS)
-  );
+test('o dia-base conta como dia 1: a contagem antiga (dia seguinte) dava 23/11 e estava errada', () => {
+  assert.equal(calcularVencimento('2026-11-17', 3, 'uteis', FERIADOS, ANTIGA), '2026-11-23');
+  assert.equal(calcularVencimento('2026-11-13', 3, 'uteis', FERIADOS, ANTIGA), '2026-11-18'); // valor antigo do 224854 pela entrada
+  assert.equal(calcularVencimento('2026-11-13', 3, 'uteis', FERIADOS), '2026-11-17'); // 13, 16 e 17
 });
 
-test('convenção: o dia-base não conta e o vencimento é o último dia do prazo', () => {
-  assert.equal(calcularVencimento('2026-11-09', 1, 'uteis', []), '2026-11-10');
+test('convenção: prazo de 1 dia útil vence no próprio dia-base; prazo 0/nulo também', () => {
+  assert.equal(calcularVencimento('2026-11-09', 1, 'uteis', []), '2026-11-09');
+  assert.equal(calcularVencimento('2026-11-09', 2, 'uteis', []), '2026-11-10');
   assert.equal(calcularVencimento('2026-11-09', 0, 'uteis', []), '2026-11-09');
+  assert.equal(calcularVencimento('2026-11-09', null, 'uteis', []), '2026-11-09');
 });
 
-test('calendário: pula sábados e domingos', () => {
-  // sexta 13/11 + 1 útil = segunda 16/11
-  assert.equal(calcularVencimento('2026-11-13', 1, 'uteis', []), '2026-11-16');
-  // sábado 14/11 + 1 útil = segunda 16/11
+test('calendário: dia-base em fim de semana não conta; começa no próximo dia útil', () => {
+  // sábado 14/11, 1 dia útil = segunda 16/11
   assert.equal(calcularVencimento('2026-11-14', 1, 'uteis', []), '2026-11-16');
+  // domingo 15/11, 2 dias úteis = segunda e terça
+  assert.equal(calcularVencimento('2026-11-15', 2, 'uteis', []), '2026-11-17');
+  // sexta 13/11: o próprio dia conta; 2 dias úteis = sexta e segunda
+  assert.equal(calcularVencimento('2026-11-13', 2, 'uteis', []), '2026-11-16');
 });
 
 test('calendário: pula feriados cadastrados, inclusive em dia de semana', () => {
-  // quinta 19/11 + 1 útil: 20/11 é feriado, 21-22 fim de semana -> segunda 23/11
-  assert.equal(calcularVencimento('2026-11-19', 1, 'uteis', FERIADOS), '2026-11-23');
-  assert.equal(calcularVencimento('2026-11-19', 1, 'uteis', []), '2026-11-20');
+  // quinta 19/11, 2 úteis: 19 conta; 20 é feriado, 21-22 fim de semana -> segunda 23/11
+  assert.equal(calcularVencimento('2026-11-19', 2, 'uteis', FERIADOS), '2026-11-23');
+  assert.equal(calcularVencimento('2026-11-19', 2, 'uteis', []), '2026-11-20');
+  // dia-base que é feriado não conta: sexta 20/11 (feriado), 1 útil = segunda 23/11
+  assert.equal(calcularVencimento('2026-11-20', 1, 'uteis', FERIADOS), '2026-11-23');
 });
 
 test('calendário: feriado que cai no domingo não pula um dia útil a mais', () => {
-  // 15/11/2026 é domingo (feriado): sexta 13/11 + 1 útil continua sendo segunda 16/11
-  assert.equal(calcularVencimento('2026-11-13', 1, 'uteis', FERIADOS), '2026-11-16');
+  // 15/11/2026 é domingo (feriado): sexta 13/11, 2 úteis = sexta e segunda 16/11
+  assert.equal(calcularVencimento('2026-11-13', 2, 'uteis', FERIADOS), '2026-11-16');
 });
 
-test('prazo corrido ignora fim de semana e feriado', () => {
-  assert.equal(calcularVencimento('2026-11-17', 3, 'corridos', FERIADOS), '2026-11-20');
+test('prazo corrido ignora fim de semana e feriado; o dia-base conta', () => {
+  assert.equal(calcularVencimento('2026-11-17', 3, 'corridos', FERIADOS), '2026-11-19');
+  assert.equal(calcularVencimento('2026-11-19', 3, 'corridos', FERIADOS), '2026-11-21');
 });
 
 test('sem_prazo não gera vencimento', () => {
@@ -60,8 +66,8 @@ test('sem_prazo não gera vencimento', () => {
 });
 
 test('aceita Date do driver pg (DATE = meia-noite local) e ISO completo', () => {
-  assert.equal(calcularVencimento(new Date(2026, 10, 17), 3, 'uteis', FERIADOS.map((d) => new Date(d + 'T00:00:00'))), '2026-11-23');
-  assert.equal(calcularVencimento('2026-11-17T00:00:00.000Z', 3, 'uteis', FERIADOS), '2026-11-23');
+  assert.equal(calcularVencimento(new Date(2026, 10, 17), 3, 'uteis', FERIADOS.map((d) => new Date(d + 'T00:00:00'))), '2026-11-19');
+  assert.equal(calcularVencimento('2026-11-17T00:00:00.000Z', 3, 'uteis', FERIADOS), '2026-11-19');
 });
 
 test('resultado não depende do fuso do servidor (UTC x Manaus x outros)', () => {
@@ -73,7 +79,7 @@ test('resultado não depende do fuso do servidor (UTC x Manaus x outros)', () =>
   `;
   for (const tz of ['UTC', 'America/Manaus', 'America/Sao_Paulo', 'Asia/Tokyo']) {
     const saida = execFileSync(process.execPath, ['-e', script], { env: { ...process.env, TZ: tz } }).toString().trim();
-    assert.equal(saida, '2026-11-23', `TZ=${tz}`);
+    assert.equal(saida, '2026-11-19', `TZ=${tz}`);
   }
 });
 

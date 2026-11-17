@@ -3,8 +3,8 @@
 Correção: o prazo de um serviço passava a contar da **data de entrada** do
 protocolo (ex.: entrou 13/11, Raquel puxou 17/11, serviço de 3 dias úteis
 vencia 18/11). Agora conta da **data em que o protocolo é puxado da fila ou
-distribuído** para executar aquele serviço (17/11 -> vence 23/11, pulando o
-feriado de 20/11 e o fim de semana).
+distribuído** para executar aquele serviço, e o **dia da puxada conta como dia 1**
+(puxado terça 17/11, 3 dias úteis = 17, 18 e 19 -> vence 19/11).
 
 > Este arquivo é o guia vivo desta mudança; atualize-o em vez de criar outro.
 > **Esta mudança TEM migration** (`009_prazo_base_data.sql`) e ela deve ser
@@ -24,7 +24,7 @@ backup de dias atrás.
 - [x] Script de recálculo com simulação (`backend/scripts/recalcular-prazos-puxada.js`).
 - [x] Testes: `cd backend && npm test` (unitários) e, com banco de DESENVOLVIMENTO,
       `RUN_DB_TESTS=1 DB_HOST=localhost DB_PASSWORD=<senha> npm test` (30 testes, todos passando).
-- [x] Testado na interface no Docker local (puxar na Fila -> vencimento 23/11 no caso do 224854).
+- [x] Testado na interface no Docker local (puxar na Fila -> vencimento do caso do 224854).
 - [x] Simulação **somente leitura** em produção em 17/11/2026 (nada foi gravado; ver seção 4).
 
 ### Implantado em produção em 17/11/2026 (servidor do 1º Ofício)
@@ -48,15 +48,20 @@ backup de dias atrás.
 
 - [ ] 6. **Aplicar o recálculo dos protocolos antigos** - só com autorização explícita do
       Michael (seção 5). Muda os KPIs de "atrasados" retroativamente. Faça um novo backup
-      antes, comece pelo protocolo 224854 (esperado 18/11 -> 23/11), depois lotes de 50.
+      antes, lotes de 50.
       Protocolos puxados a partir do deploy já nascem corretos e não entram no recálculo.
-- [x] 6a. **Protocolo 224854 recalculado em 17/11/2026** (autorizado pelo Michael): vencimento
-      18/11 -> 23/11, data-base 17/11, evento `RECALCULO_PRAZO` no histórico. Backup antes:
-      `~/backups_cartorio/backup_20261117_103102_antes_recalculo_224854.sql`. Repetir o comando
-      não altera mais nada (classe `ja_tem_data_base`).
-- [ ] 6b. Restante do recálculo (~175 protocolos): **ainda não autorizado**. Novo backup antes,
-      depois `--apply --limite 50` por lote, conferindo o CSV de cada simulação.
-- [ ] 7. Ao terminar o 6b, anotar aqui a data e a quantidade aplicada.
+- [x] 6a. **Protocolo 224854 recalculado em 17/11/2026** (autorizado pelo Michael) como teste.
+      Foi gravado 23/11 porque o sistema ainda não contava o dia da puxada. O Michael
+      corrigiu a regra (17, 18, 19 = vence 19/11); ver 6b.
+- [ ] 6b. **Corrigir a contagem do dia-base** (decisão do Michael em 17/11/2026, já no código):
+      backup antes, deploy do backend, e então
+      `node scripts/recalcular-prazos-puxada.js --apply --classe corrigir_contagem_dia_base`
+      (224854 e os demais já puxados pela versão anterior, de 23/11 para 19/11). O filtro
+      `--classe` garante que os ~175 protocolos antigos **não** são tocados.
+- [ ] 6c. Restante do recálculo (protocolos puxados antes da correção, classes `corrigir` e
+      `registrar_data_base`): **ainda não autorizado**. Novo backup antes, depois
+      `--apply --limite 50` por lote, conferindo o CSV de cada simulação.
+- [ ] 7. Ao terminar o 6c, anotar aqui a data e a quantidade aplicada.
 
 ### Pendências de decisão / trabalho futuro (precisam do Michael)
 
@@ -103,9 +108,12 @@ a única data que telas, filtros, relatórios e alertas leem. A nova coluna
 `protocolos.prazo_base_data` registra de onde o vencimento da execução atual
 foi calculado (`NULL` = registro antigo, data-base não registrada).
 
-**Convenção de contagem (inalterada):** o dia-base não conta, a contagem começa
-no dia seguinte; em prazo "úteis" pulam-se sábado, domingo e as datas da tabela
-`feriados`; em "corridos" todos os dias contam; o vencimento é uma data (só fica
+**Convenção de contagem (definida pelo Michael em 17/11/2026, vale para TODOS os
+prazos):** o dia em que o prazo começa **conta como dia 1** (se for dia útil, em
+prazo "úteis"). Até 17/11/2026 o sistema começava a contar no dia seguinte; por
+isso vencimentos gravados antes dessa data estão 1 dia útil à frente do correto
+(o script de recálculo reconhece e corrige). Em prazo "úteis" pulam-se sábado,
+domingo e as datas da tabela `feriados`; em "corridos" todos os dias contam; o vencimento é uma data (só fica
 atrasado quando hoje > vencimento); "sem prazo" não gera vencimento. Não existe
 tabela de "suspensões" no sistema: o único calendário é `feriados` (se a
 serventia tiver suspensão de expediente, cadastre-a como feriado).
@@ -167,10 +175,10 @@ análise e **não** é alterado. Copie o CSV para fora do container
 (`docker compose cp backend:/app/recalculo-prazos-....csv .`) antes de aplicar:
 ele é o registro dos valores anteriores.
 
-Simulação feita em produção em 17/11/2026 (908 protocolos em andamento): 670
-são de serviços sem prazo (nada a fazer), **170 mudam de vencimento**
-(27 deles aparecem hoje como vencidos; 16 deixariam de estar vencidos), 17 só
-registram a data-base, 43 + 3 ficam para análise manual.
+Simulação feita em produção em 17/11/2026 ANTES da regra do dia-base (913 protocolos
+em andamento): 669 são de serviços sem prazo; 176 mudavam de vencimento; 17 só
+registravam a data-base; 46 ficam para análise manual. **Os números mudam com a regra
+nova** (o dia-base conta como dia 1): rode a simulação de novo e use o resumo atual.
 
 ## 5. Aplicar a correção (decisão do cartório)
 
@@ -178,6 +186,7 @@ Corrigir muda KPIs de "atrasados"/produtividade retroativamente, então aplique
 de forma gradual e só depois de revisar o CSV:
 
 ```bash
+docker compose exec backend node scripts/recalcular-prazos-puxada.js --apply --classe corrigir_contagem_dia_base
 docker compose exec backend node scripts/recalcular-prazos-puxada.js --numero 224854 --apply
 docker compose exec backend node scripts/recalcular-prazos-puxada.js --apply --limite 50
 docker compose exec backend node scripts/recalcular-prazos-puxada.js --apply

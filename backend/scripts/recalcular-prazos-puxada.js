@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-// Recalcula o vencimento de protocolos EM ANDAMENTO que foram puxados/distribuídos
-// antes da correção da data-base (prazo contado da data de entrada em vez da
-// data da puxada/distribuição).
+// Recalcula o vencimento de protocolos EM ANDAMENTO gravados com a regra antiga:
+//   (a) puxados/distribuídos antes da correção da data-base (prazo contado da data
+//       de entrada em vez da data da puxada/distribuição) e
+//   (b) já com data-base, mas calculados sem contar o dia-base (até 17/11/2026 o
+//       sistema começava a contar no dia seguinte; a regra agora é o dia-base
+//       contar como dia 1: puxado em 17/11, 3 dias úteis = 17, 18, 19).
 //
 // SIMULAÇÃO POR PADRÃO: sem --apply nada é gravado no banco; o script só lista,
 // grava um CSV com valor atual x valor recalculado e imprime o resumo.
@@ -17,6 +20,7 @@
 //                    o vencimento no banco ainda for o mesmo que foi simulado)
 //   --numero <n>     restringe a um protocolo
 //   --limite <n>     com --apply, corrige no máximo n protocolos (lote gradual)
+//   --classe <c>     com --apply, só aplica a essa classe do relatório (ex.: corrigir_contagem_dia_base)
 //   --saida <arq>    caminho do CSV (padrão: ./recalculo-prazos-<data-hora>.csv)
 //
 // EVIDÊNCIA usada (nada é chutado):
@@ -33,7 +37,8 @@
 
 const fs = require('fs');
 const pool = require('../config/database');
-const { calcularVencimento, paraDataISO, formatarDataBR } = require('../services/prazo-service');
+const { calcularVencimento, formatarDataBR } = require('../services/prazo-service');
+const ANTIGA = { contarDiaBase: false }; // contagem usada até 17/11/2026
 
 const args = process.argv.slice(2);
 const opt = (nome) => {
@@ -43,11 +48,13 @@ const opt = (nome) => {
 const APLICAR = args.includes('--apply');
 const NUMERO = opt('--numero');
 const LIMITE = opt('--limite') ? Number(opt('--limite')) : Infinity;
+const CLASSE = opt('--classe');
 const agora = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
 const SAIDA = opt('--saida') || `recalculo-prazos-${agora}.csv`;
 
 const CLASSES = {
   CORRIGIR: 'corrigir',                          // vencimento muda
+  CORRIGIR_CONTAGEM: 'corrigir_contagem_dia_base', // data-base já gravada; só falta contar o dia-base
   REGISTRAR_BASE: 'registrar_data_base',         // vencimento já certo; só grava a data-base
   JA_REGISTRADO: 'ja_tem_data_base',             // criado/puxado depois da correção
   SEM_PRAZO: 'servico_sem_prazo',
@@ -111,10 +118,25 @@ async function main() {
       evento: p.acao ? `${p.acao} em ${p.evento_quando} por ${p.evento_usuario || '?'}` : '',
       evento_dia: p.evento_dia || '',
       data_base_proposta: '', vencimento_novo: '', classe: '', motivo: '',
+      base_atual: p.prazo_base_data || '',
     };
 
-    if (p.prazo_base_data) { item.classe = CLASSES.JA_REGISTRADO; return item; }
-    if (p.tipo_prazo === 'sem_prazo') { item.classe = CLASSES.SEM_PRAZO; return item; }
+    if (p.tipo_prazo === 'sem_prazo') { item.classe = p.prazo_base_data ? CLASSES.JA_REGISTRADO : CLASSES.SEM_PRAZO; return item; }
+    if (p.prazo_base_data) {
+      // Data-base já gravada: só corrige se o vencimento é exatamente o da contagem
+      // antiga (sem o dia-base) e difere do da regra atual.
+      const antigo = calcularVencimento(p.prazo_base_data, p.prazo, p.tipo_prazo, feriados, ANTIGA);
+      const atual = calcularVencimento(p.prazo_base_data, p.prazo, p.tipo_prazo, feriados);
+      if (p.data_vencimento === antigo && antigo !== atual) {
+        item.classe = CLASSES.CORRIGIR_CONTAGEM;
+        item.data_base_proposta = p.prazo_base_data;
+        item.vencimento_novo = atual;
+        item.motivo = 'vencimento gravado sem contar o dia-base';
+      } else {
+        item.classe = CLASSES.JA_REGISTRADO;
+      }
+      return item;
+    }
     if (!p.acao || p.acao === 'CRIACAO') { item.classe = CLASSES.OK_SEM_TRANSFERENCIA; return item; }
     if (p.acao === 'reabertura' || p.acao === 'transferencia_arquivo') { item.classe = CLASSES.OK_JA_RECALCULADO; return item; }
     if (p.acao !== 'transferencia') {
@@ -135,7 +157,7 @@ async function main() {
       return item;
     }
 
-    const pelaEntrada = calcularVencimento(p.data_entrada, p.prazo, p.tipo_prazo, feriados);
+    const pelaEntrada = calcularVencimento(p.data_entrada, p.prazo, p.tipo_prazo, feriados, ANTIGA);
     if (p.data_vencimento !== pelaEntrada) {
       item.classe = CLASSES.ANALISAR_VENC_DIVERGE;
       item.motivo = `vencimento gravado ${p.data_vencimento} difere do cálculo pela entrada (${pelaEntrada}); alguém alterou depois`;
@@ -144,13 +166,7 @@ async function main() {
 
     item.data_base_proposta = p.evento_dia;
     item.vencimento_novo = calcularVencimento(p.evento_dia, p.prazo, p.tipo_prazo, feriados);
-    if (p.evento_dia <= p.data_entrada) {
-      // Puxado no mesmo dia da entrada: o vencimento já está certo.
-      item.classe = CLASSES.REGISTRAR_BASE;
-      item.vencimento_novo = p.data_vencimento;
-    } else {
-      item.classe = item.vencimento_novo === p.data_vencimento ? CLASSES.REGISTRAR_BASE : CLASSES.CORRIGIR;
-    }
+    item.classe = item.vencimento_novo === p.data_vencimento ? CLASSES.REGISTRAR_BASE : CLASSES.CORRIGIR;
     return item;
   });
 
@@ -167,7 +183,7 @@ async function main() {
   console.log(`\nProtocolos em andamento analisados: ${itens.length}`);
   for (const [c, n] of Object.entries(porClasse).sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(5)}  ${c}`);
 
-  const corrigir = itens.filter((i) => i.classe === CLASSES.CORRIGIR);
+  const corrigir = itens.filter((i) => i.classe === CLASSES.CORRIGIR || i.classe === CLASSES.CORRIGIR_CONTAGEM);
   const jaVencidosHoje = corrigir.filter((i) => i.vencimento_atual < new Date().toISOString().slice(0, 10)).length;
   console.log(`\nA CORRIGIR: ${corrigir.length} protocolo(s) mudam de vencimento` +
     ` (${jaVencidosHoje} deles hoje aparecem como vencidos pelo valor atual).`);
@@ -185,7 +201,8 @@ async function main() {
 
   // ---------- aplicação ----------
   const alvo = itens
-    .filter((i) => i.classe === CLASSES.CORRIGIR || i.classe === CLASSES.REGISTRAR_BASE)
+    .filter((i) => i.classe === CLASSES.CORRIGIR || i.classe === CLASSES.CORRIGIR_CONTAGEM || i.classe === CLASSES.REGISTRAR_BASE)
+    .filter((i) => !CLASSE || i.classe === CLASSE)
     .slice(0, LIMITE);
   console.log(`\nAPLICANDO em ${alvo.length} protocolo(s) (corrigir + registrar data-base)...`);
 
@@ -199,17 +216,20 @@ async function main() {
       const r = await client.query(
         `UPDATE protocolos
          SET data_vencimento = $1, prazo_base_data = $2, updated_at = updated_at
-         WHERE id = $3 AND status = 'andamento' AND prazo_base_data IS NULL
+         WHERE id = $3 AND status = 'andamento'
+           AND prazo_base_data IS NOT DISTINCT FROM $5::date
            AND data_vencimento IS NOT DISTINCT FROM $4::date`,
-        [i.vencimento_novo || null, i.data_base_proposta, i.id, i.vencimento_atual || null]
+        [i.vencimento_novo || null, i.data_base_proposta, i.id, i.vencimento_atual || null, i.base_atual || null]
       );
       if (r.rowCount === 0) { pulados++; continue; }
       alterados++;
       await client.query(
         `INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at)
          VALUES ($1, NULL, 'RECALCULO_PRAZO', $2, NOW())`,
-        [i.id, `Prazo recalculado a partir da puxada/distribuição em ${formatarDataBR(i.data_base_proposta)} ` +
-          `(evento ${i.evento}). Vencimento anterior: ${formatarDataBR(i.vencimento_atual)}; novo: ${formatarDataBR(i.vencimento_novo)}. ` +
+        [i.id, (i.classe === CLASSES.CORRIGIR_CONTAGEM
+          ? `Prazo ajustado: o dia da puxada/distribuição (${formatarDataBR(i.data_base_proposta)}) passa a contar como dia 1. `
+          : `Prazo recalculado a partir da puxada/distribuição em ${formatarDataBR(i.data_base_proposta)} (evento ${i.evento}). `) +
+          `Vencimento anterior: ${formatarDataBR(i.vencimento_atual)}; novo: ${formatarDataBR(i.vencimento_novo)}. ` +
           `Correção em lote (scripts/recalcular-prazos-puxada.js).`]
       );
     }
