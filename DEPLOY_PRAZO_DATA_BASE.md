@@ -50,17 +50,20 @@ backup de dias atrás.
       Michael (seção 5). Muda os KPIs de "atrasados" retroativamente. Faça um novo backup
       antes, lotes de 50.
       Protocolos puxados a partir do deploy já nascem corretos e não entram no recálculo.
-- [x] 6a. **Protocolo 224854 recalculado em 17/11/2026** (autorizado pelo Michael) como teste.
-      Foi gravado 23/11 porque o sistema ainda não contava o dia da puxada. O Michael
-      corrigiu a regra (17, 18, 19 = vence 19/11); ver 6b.
-- [ ] 6b. **Corrigir a contagem do dia-base** (decisão do Michael em 17/11/2026, já no código):
-      backup antes, deploy do backend, e então
-      `node scripts/recalcular-prazos-puxada.js --apply --classe corrigir_contagem_dia_base`
-      (224854 e os demais já puxados pela versão anterior, de 23/11 para 19/11). O filtro
-      `--classe` garante que os ~175 protocolos antigos **não** são tocados.
-- [ ] 6c. Restante do recálculo (protocolos puxados antes da correção, classes `corrigir` e
-      `registrar_data_base`): **ainda não autorizado**. Novo backup antes, depois
-      `--apply --limite 50` por lote, conferindo o CSV de cada simulação.
+- [x] 6a. **Protocolo 224854 corrigido em 17/11/2026** (autorizado pelo Michael como teste): primeiro
+      gravado 23/11 (sistema ainda não contava o dia da puxada), depois ajustado para **19/11**
+      (17, 18 e 19) com a regra nova. Backups: `backup_20261117_103102_antes_recalculo_224854.sql` e
+      `backup_20261117_104908_antes_contagem_dia_base.sql` (em `~/backups_cartorio/`). Dois eventos
+      `RECALCULO_PRAZO` no histórico guardam os valores anteriores.
+- [x] 6a2. Regra "dia-base conta como dia 1" implantada no backend de produção (commit `e6d0905`).
+- [ ] 6b. **Outros 8 protocolos puxados hoje pelo código intermediário** (224832, 224860, 224865,
+      224866, 224872, 224874, 224887, 224896; Nota Devolutiva/Orçamento, vencimento 25/11 -> 24/11):
+      aguardando autorização do Michael. Comando (só toca essa classe, não os antigos):
+      `docker compose exec backend node scripts/recalcular-prazos-puxada.js --apply --classe corrigir_contagem_dia_base`
+- [ ] 6c. Restante do recálculo (protocolos puxados antes da correção). Simulação de 17/11 já com a
+      regra nova: 919 em andamento, 669 sem prazo, **34 mudam de vencimento** (classe `corrigir`),
+      **157 só registram a data-base** (o vencimento já bate), 45 para análise manual. **Ainda não
+      autorizado.** Novo backup antes, depois `--apply --limite 50` por lote, conferindo o CSV.
 - [ ] 7. Ao terminar o 6c, anotar aqui a data e a quantidade aplicada.
 
 ### Pendências de decisão / trabalho futuro (precisam do Michael)
