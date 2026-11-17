@@ -103,7 +103,22 @@ O frontend **não** foi reconstruído (memória apertada; ele não é necessári
       código usa America/Manaus fixo (confirmar o fuso do 6RI); frontend ainda no código antigo
       (não mostra "criado por" na Fila).
 
-**4RI (VPS Hostinger):** não verificado ainda.
+**4RI (VPS Hostinger, `/opt/sistema-cartorio`, `4rimanaus.aguia.net.br`) - diagnosticado em 17/11/2026, NADA alterado.**
+VPS só com o cartório + Traefik, fuso UTC (cartório em Manaus: fuso do código correto), 3 GB de memória livre
+e disco vazio (dá para reconstruir o frontend). Mesmo código dos outros (merge de 25/09, sem alteração local),
+`git pull` sem conflito (13 commits), banco sem `prazo_base_data`.
+- Banco: 314 em andamento (só 30 vencidos), 73 aguardando (o mais antigo é de 21/08/2024), 4.013 puxadas com
+  serviço no histórico. Sem `protocolo_sessoes` e sem feriados de 2027 (como no 6RI).
+- Simulação (sem gravar; CSV `sim_4ri_antes_20261117.csv`): **47 mudam de vencimento** (11 já vencidos,
+  deslocamento -1 a +24 dias; todos puxados nos últimos 30 dias, 45 nos últimos 7), **39 só registram a
+  data-base**, 77 sem prazo, 25+3 de reabertura/Arquivo/nunca puxados (contagem antiga), e para análise
+  manual **91** (90 tiveram "adicionar serviço" depois da puxada) + **32** com vencimento vazio apesar do
+  serviço ter prazo.
+- [ ] Deploy no 4RI: **aguardando autorização**. Passos: backup, migration 009, pull, rebuild do backend
+      (`docker compose build backend` + `up -d --no-deps backend`), simulação, recálculo em lotes.
+- [ ] Melhoria possível do script (não feita): corrigir também as reaberturas e transferências para o
+      Arquivo (o evento dá a data exata e o vencimento gravado é o da contagem antiga a partir dela):
+      4RI 25+, 1RI 3, e avaliar os 32 "vencimento vazio".
 
 ### Pendências de decisão / trabalho futuro (precisam do Michael)
 
