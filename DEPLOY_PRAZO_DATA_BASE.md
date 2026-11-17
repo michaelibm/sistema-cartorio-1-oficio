@@ -72,6 +72,30 @@ puxada da fila) e 4 que vieram de reabertura, Arquivo ou nunca foram puxados (gr
 contagem antiga a partir de "hoje"/entrada, podem estar 1 dia útil à frente). Listados na coluna
 `classe` do CSV `etapa2_antes_20261117.csv`.
 
+### Outros cartórios
+
+**6RI (VPS, `/opt/sistema-cartorio`) - implantado em 17/11/2026, recálculo NÃO aplicado.**
+Compartilha o servidor com outras aplicações (Traefik, n8n, Evolution, Portainer, Sisconf): só o
+`cartorio-backend` foi recriado (`docker compose build backend` + `up -d --no-deps backend`), nada mais.
+O frontend **não** foi reconstruído (memória apertada; ele não é necessário para esta correção).
+- [x] Backup `backup_6ri_20261117_112320_antes_prazo.sql` (`/root/backups_cartorio/`), tag
+      `sistema-cartorio-backend:rollback-prazo`.
+- [x] Migration 009 aplicada (1.891 protocolos, coluna vazia). Merge `9b3caff` sem conflito.
+- [x] Backend no ar, site público 200, API 401 sem token, testes unitários OK no container.
+- [x] Simulação (CSV `sim_6ri_antes_20261117.csv`): 932 em andamento -> **404 mudam de vencimento**
+      (348 já vencidos hoje; **148 deixariam de estar vencidos**, 200 continuariam, só menos
+      atrasados; deslocamento de -1 a +178 dias porque há fila parada desde maio), 84 só registram
+      a data-base, 95 sem prazo, 17 análise manual e **331 sem serviço no evento** (puxadas sem
+      escolher serviço; sem prova de origem, não corrigíveis automaticamente).
+- [ ] Recálculo no 6RI: **aguardando autorização do Michael** (backup antes; lotes de 50).
+- [ ] Decidir os 331 "puxada sem serviço no evento" (maioria Registro de Imóvel).
+- [ ] Pendências do 6RI fora desta correção: faltam feriados de 2027; a tabela `protocolo_sessoes`
+      não existe no banco (Iniciar/Pausar sessão devem dar erro 500); o fuso do servidor é -03 e o
+      código usa America/Manaus fixo (confirmar o fuso do 6RI); frontend ainda no código antigo
+      (não mostra "criado por" na Fila).
+
+**4RI (VPS Hostinger):** não verificado ainda.
+
 ### Pendências de decisão / trabalho futuro (precisam do Michael)
 
 - [ ] **Frontend marca "VENCIDO" um dia antes em Manaus** (detalhes em "Pontos em
