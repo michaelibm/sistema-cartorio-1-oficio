@@ -131,10 +131,19 @@ e disco vazio (dá para reconstruir o frontend). Mesmo código dos outros (merge
 
 ### Pendências de decisão / trabalho futuro (precisam do Michael)
 
-- [ ] **Frontend marca "VENCIDO" um dia antes em Manaus** (detalhes em "Pontos em
-      aberto"). Correção sugerida: tratar só `YYYY-MM-DD` como data local, em 14
-      pontos de `Protocolos.jsx` e `Dashboard.jsx`. Não foi feita porque é uma
-      mudança de exibição separada; pedir aprovação. Exige rebuild do frontend.
+- [ ] **DECISÃO ABERTA - contagem do dia da puxada (23/11/2026).** Em 17/11 o Michael definiu que o dia
+      da puxada conta como dia 1 (puxado 17/11, 3 úteis = 17, 18, 19). Em 23/11 ele mostrou o protocolo
+      224947 (1RI), puxado em 18/11, e esperava vencer em **24/11**, contando a partir do dia
+      seguinte (19, 23, 24, pulando o feriado do dia 20), o oposto da regra de 17/11. O sistema hoje
+      grava 23/11 (18, 19, 23). **Não alterar a regra sem a confirmação do Michael:** inverter exige
+      mudar `calcularVencimento` (padrão `contarDiaBase`) e refazer o recálculo nos 3 cartórios
+      (1RI, 4RI e 6RI), com backup antes. Ver a pergunta registrada na conversa.
+- [x] **Frontend marcava "VENCIDO" um dia antes em Manaus** - corrigido em 23/11/2026 (commit
+      `3586652`, `frontend/src/utils/datas.js`): protocolo que vence hoje mostra "HOJE" e só vira
+      vencido no dia seguinte. **Implantado só no 1RI** (backup `backup_20261123_092124_antes_fix_vencido.sql`,
+      tag `rollback-vencido`, rebuild só do frontend). **4RI e 6RI ainda com o frontend antigo**
+      (continuam mostrando VENCIDO um dia antes): rebuild do frontend pendente em cada um
+      (6RI: memória apertada, avaliar antes).
 - [ ] Redistribuir protocolo já em andamento no mesmo serviço **não** renova o
       prazo (decisão tomada por falta de regra definida). Confirmar com o cartório.
 - [ ] Corrigir a lacuna de schema (`protocolo_sessoes`, `tem_orcamento`,
