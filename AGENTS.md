@@ -57,9 +57,10 @@ O prazo conta da **puxada/distribuição**, não da `data_entrada`. Toda a regra
 (dias úteis, feriados, fuso de Manaus, quando uma mudança inicia um novo prazo)
 vive em `backend/services/prazo-service.js` - **não recalcule vencimento em
 outro lugar** nem use `new Date().toISOString()` como "hoje" (é dia UTC; use
-`hojeManaus()`). **O dia em que o prazo começa conta como dia 1** (regra do Michael, 17/11/2026:
-puxado em 17/11, 3 dias úteis = 17, 18, 19 -> vence 19/11); antes disso o sistema
-começava no dia seguinte. `protocolos.prazo_base_data` guarda a data-base da execução
+`hojeManaus()`). **O dia da puxada NÃO conta: a contagem começa no dia útil seguinte** (confirmado pelo Michael
+em 23/11/2026: puxado em 18/11, 3 dias úteis = 19, 23, 24 -> vence 24/11, com feriado no dia 20).
+De 17 a 23/11/2026 vigorou a regra inversa (dia da puxada = dia 1), por pedido inicial depois
+corrigido pelo Michael; foi revertida (não reintroduza sem pedido explícito). `protocolos.prazo_base_data` guarda a data-base da execução
 atual; `data_vencimento` continua sendo o que telas/relatórios/alertas leem.
 Detalhes, migration 009 e script de recálculo em
 [DEPLOY_PRAZO_DATA_BASE.md](DEPLOY_PRAZO_DATA_BASE.md). Testes: `cd backend && npm test`.

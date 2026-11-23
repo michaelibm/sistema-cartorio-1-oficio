@@ -129,7 +129,7 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
   try {
     await t.test('1. caso relatado: entrada 13/11, puxada 17/11 -> prazo de 3 dias úteis conta de 17/11', async () => {
       const p = await novoProtocolo({ servico: sv.u3, entrada: '2026-11-13' });
-      assert.equal((await ler(p.id)).data_vencimento, '2026-11-17'); // contado da entrada (13, 16, 17)
+      assert.equal((await ler(p.id)).data_vencimento, '2026-11-18'); // contado da entrada (16, 17, 18)
 
       definirAgora('2026-11-17T13:26:21Z'); // 09:26 em Manaus
       const r = await api('POST', `/${p.id}/transferir`, reg1, { novo_responsavel_id: reg1.id, puxar_fila: true });
@@ -140,9 +140,9 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
       assert.equal(d.status, 'andamento');
       assert.equal(d.responsavel_id, reg1.id);
       assert.equal(d.prazo_base_data, '2026-11-17');
-      assert.equal(d.data_vencimento, '2026-11-19'); // 17, 18 e 19: o dia da puxada conta como dia 1
+      assert.equal(d.data_vencimento, '2026-11-23'); // 18, 19, (20 feriado, 21-22 fim de semana), 23: o dia da puxada não conta
       assert.equal(d.data_entrada, '2026-11-13'); // entrada preservada
-      assert.equal(r.body.data_vencimento, '2026-11-19');
+      assert.equal(r.body.data_vencimento, '2026-11-23');
     });
 
     await t.test('1b. puxada escolhendo o serviço (como a Fila faz) usa o prazo do serviço escolhido', async () => {
@@ -165,7 +165,7 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
       assert.equal(r.status, 200, JSON.stringify(r.body));
       const d = await ler(p.id);
       assert.equal(d.prazo_base_data, '2026-11-17');
-      assert.equal(d.data_vencimento, '2026-11-19');
+      assert.equal(d.data_vencimento, '2026-11-23');
       assert.equal(d.data_entrada, '2026-11-03');
     });
 
@@ -214,16 +214,16 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
       definirAgora('2026-11-09T14:00:00Z'); // segunda
       await api('POST', `/${p.id}/transferir`, sup, { novo_responsavel_id: reg1.id });
       pararRelogio();
-      assert.equal((await ler(p.id)).data_vencimento, '2026-11-11'); // seg 9, ter 10, qua 11
+      assert.equal((await ler(p.id)).data_vencimento, '2026-11-12'); // ter 10, qua 11, qui 12
 
       const c = await novoProtocolo({ servico: sv.c3, entrada: '2026-11-02' });
       definirAgora('2026-11-17T14:00:00Z');
       await api('POST', `/${c.id}/transferir`, sup, { novo_responsavel_id: reg1.id });
       pararRelogio();
-      assert.equal((await ler(c.id)).data_vencimento, '2026-11-19'); // corridos: 17, 18, 19
+      assert.equal((await ler(c.id)).data_vencimento, '2026-11-20'); // corridos: 18, 19, 20
     });
 
-    await t.test('5a. calendário: puxada na quarta 18/11, 3 úteis = 18, 19, (20 feriado, 21-22 fim de semana), 23', async () => {
+    await t.test('5a. protocolo 224947: puxado na quarta 18/11, 3 úteis = 19, (20 feriado, 21-22 fim de semana), 23 e 24', async () => {
       const p = await novoProtocolo({ servico: sv.u3, entrada: '2026-11-13' });
       definirAgora('2026-11-18T14:00:00Z');
       const r = await api('POST', `/${p.id}/transferir`, sup, { novo_responsavel_id: reg1.id });
@@ -231,7 +231,7 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
       assert.equal(r.status, 200, JSON.stringify(r.body));
       const d = await ler(p.id);
       assert.equal(d.prazo_base_data, '2026-11-18');
-      assert.equal(d.data_vencimento, '2026-11-23');
+      assert.equal(d.data_vencimento, '2026-11-24');
     });
 
     await t.test('5b. serviço sem prazo: puxar limpa o vencimento e registra a data-base', async () => {
@@ -293,7 +293,7 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
       definirAgora('2026-11-17T13:26:21Z');
       await api('POST', `/${p.id}/transferir`, reg1, { novo_responsavel_id: reg1.id, puxar_fila: true });
       const antes = await ler(p.id);
-      assert.equal(antes.data_vencimento, '2026-11-19');
+      assert.equal(antes.data_vencimento, '2026-11-23');
       pararRelogio();
 
       definirAgora('2026-11-18T13:00:00Z');
@@ -308,7 +308,7 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
       pararRelogio();
       assert.equal(r.status, 200, JSON.stringify(r.body));
       const depois = await ler(p.id);
-      assert.equal(depois.data_vencimento, '2026-11-19'); // antes do conserto voltava para o valor contado da entrada
+      assert.equal(depois.data_vencimento, '2026-11-23'); // antes do conserto voltava para o valor contado da entrada
       assert.equal(depois.prazo_base_data, '2026-11-17');
       assert.equal(depois.data_entrada, '2026-11-13');
     });
@@ -324,7 +324,7 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
       const d = await ler(p.id);
       assert.equal(d.status, 'andamento');
       assert.equal(d.prazo_base_data, '2026-11-17');
-      assert.equal(d.data_vencimento, '2026-11-19');
+      assert.equal(d.data_vencimento, '2026-11-23');
     });
 
     await t.test('8c. protocolo ainda na fila: corrigir serviço/entrada recalcula a partir da entrada', async () => {
@@ -354,7 +354,7 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
       const dia = (v) => String(v).slice(0, 10);
       assert.equal(dia(naLista.data_vencimento), dia(detalhe.body.data_vencimento));
       // O backend serializa DATE como meia-noite UTC; o dia civil tem que ser 19/11.
-      assert.equal(dia(naLista.data_vencimento), '2026-11-19');
+      assert.equal(dia(naLista.data_vencimento), '2026-11-23');
       assert.equal(dia(naLista.prazo_base_data), '2026-11-17');
       assert.equal(dia(naLista.data_entrada), '2026-11-13');
     });
@@ -366,7 +366,7 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
       pararRelogio();
       const d = await ler(p.id);
       assert.equal(d.prazo_base_data, '2026-11-17');
-      assert.equal(d.data_vencimento, '2026-11-19');
+      assert.equal(d.data_vencimento, '2026-11-23');
     });
 
     await t.test('11. criação direta grava a data-base (= entrada)', async () => {
@@ -378,7 +378,7 @@ test('rotas de prazo (puxada, distribuição, edição)', opts, async (t) => {
       assert.equal(c.status, 201, JSON.stringify(c.body));
       const d = await ler(c.body.id);
       assert.equal(d.prazo_base_data, '2026-11-17');
-      assert.equal(d.data_vencimento, '2026-11-19');
+      assert.equal(d.data_vencimento, '2026-11-23');
     });
   } finally {
     t.mock.timers.reset();

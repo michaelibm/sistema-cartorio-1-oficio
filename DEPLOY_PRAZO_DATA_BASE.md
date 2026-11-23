@@ -3,8 +3,16 @@
 Correção: o prazo de um serviço passava a contar da **data de entrada** do
 protocolo (ex.: entrou 13/11, Raquel puxou 17/11, serviço de 3 dias úteis
 vencia 18/11). Agora conta da **data em que o protocolo é puxado da fila ou
-distribuído** para executar aquele serviço, e o **dia da puxada conta como dia 1**
-(puxado terça 17/11, 3 dias úteis = 17, 18 e 19 -> vence 19/11).
+distribuído** para executar aquele serviço, e o **dia da puxada NÃO conta**: a contagem
+começa no dia útil seguinte (puxado quarta 18/11, 3 dias úteis = 19, 23 e 24 -> vence 24/11,
+pulando o feriado de 20/11 e o fim de semana).
+
+> **Histórico da regra (importante para quem for ler os eventos antigos):** de 17 a 23/11/2026
+> vigorou a regra inversa (o dia da puxada contava como dia 1, 17+3 úteis = 19/11), por pedido
+> feito em 17/11. Em 23/11 o Michael mostrou o protocolo 224947 e confirmou que o certo é contar
+> a partir do dia seguinte. Os vencimentos gravados nesse intervalo foram revertidos pelo script
+> (classe `corrigir_contagem_dia_base`); no histórico dos protocolos há eventos `RECALCULO_PRAZO`
+> de ida e de volta.
 
 > Este arquivo é o guia vivo desta mudança; atualize-o em vez de criar outro.
 > **Esta mudança TEM migration** (`009_prazo_base_data.sql`) e ela deve ser
@@ -183,11 +191,9 @@ a única data que telas, filtros, relatórios e alertas leem. A nova coluna
 `protocolos.prazo_base_data` registra de onde o vencimento da execução atual
 foi calculado (`NULL` = registro antigo, data-base não registrada).
 
-**Convenção de contagem (definida pelo Michael em 17/11/2026, vale para TODOS os
-prazos):** o dia em que o prazo começa **conta como dia 1** (se for dia útil, em
-prazo "úteis"). Até 17/11/2026 o sistema começava a contar no dia seguinte; por
-isso vencimentos gravados antes dessa data estão 1 dia útil à frente do correto
-(o script de recálculo reconhece e corrige). Em prazo "úteis" pulam-se sábado,
+**Convenção de contagem (confirmada pelo Michael em 23/11/2026, vale para TODOS os prazos):**
+o dia em que o prazo começa (puxada, distribuição, reabertura, criação) **não conta**; o
+dia 1 é o dia útil seguinte. Em prazo "úteis" pulam-se sábado,
 domingo e as datas da tabela `feriados`; em "corridos" todos os dias contam; o vencimento é uma data (só fica
 atrasado quando hoje > vencimento); "sem prazo" não gera vencimento. Não existe
 tabela de "suspensões" no sistema: o único calendário é `feriados` (se a
@@ -253,7 +259,7 @@ ele é o registro dos valores anteriores.
 Simulação feita em produção em 17/11/2026 ANTES da regra do dia-base (913 protocolos
 em andamento): 669 são de serviços sem prazo; 176 mudavam de vencimento; 17 só
 registravam a data-base; 46 ficam para análise manual. **Os números mudam com a regra
-nova** (o dia-base conta como dia 1): rode a simulação de novo e use o resumo atual.
+nova** (revertida em 23/11 para o dia seguinte): rode a simulação de novo e use o resumo atual.
 
 ## 5. Aplicar a correção (decisão do cartório)
 

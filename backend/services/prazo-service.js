@@ -6,12 +6,15 @@
 // entrada. A data de entrada continua sendo o recebimento original; a data-base
 // da execução atual fica em protocolos.prazo_base_data.
 //
-// CONVENÇÃO DE CONTAGEM (definida pelo cartório em 17/11/2026):
-//   - o dia-base CONTA como dia 1 (se for dia útil, no caso de prazo "uteis").
-//     Ex.: puxado na terça 17/11, 3 dias úteis = 17, 18 e 19 -> vence 19/11;
-//   - até 17/11/2026 o sistema NÃO contava o dia-base (começava no dia seguinte).
-//     Valores gravados nessa época seguem a contagem antiga; só o script de
-//     recálculo as reconhece (opção contarDiaBase: false);
+// CONVENÇÃO DE CONTAGEM (confirmada pelo Michael em 23/11/2026):
+//   - o dia-base (puxada/distribuição) NÃO conta: a contagem começa no dia útil
+//     SEGUINTE. Ex.: puxado na quarta 18/11, 3 dias úteis = 19, 23 e 24 (20 é
+//     feriado, 21-22 fim de semana) -> vence 24/11;
+//   - HISTÓRICO: de 17 a 23/11/2026 vigorou a regra inversa (pedido inicial, depois
+//     corrigido pelo Michael) (o dia-base contava como dia 1: puxado 17/11 = 17, 18, 19). Vencimentos
+//     gravados nesse intervalo seguem aquela regra e foram revertidos pelo script de
+//     recálculo (opção contarDiaBase: true reproduz essa contagem, só para o script
+//     reconhecê-los; nunca use para calcular prazos novos);
 //   - em prazo "uteis" pulam-se sábados, domingos e datas da tabela feriados;
 //   - em prazo "corridos" todos os dias contam;
 //   - o resultado é uma DATE: o serviço vence ao fim desse dia (só fica atrasado
@@ -25,6 +28,9 @@
 const pool = require('../config/database');
 
 const FUSO = 'America/Manaus';
+
+// Regra vigente: o dia-base não conta (ver cabeçalho). Único interruptor da regra.
+const CONTAR_DIA_BASE = false;
 
 // Dia civil atual em Manaus no formato YYYY-MM-DD.
 function hojeManaus(agora = new Date()) {
@@ -56,9 +62,9 @@ function formatarDataBR(valor) {
 }
 
 // Cálculo puro (sem banco): feriados é uma lista de datas (string ou Date).
-// contarDiaBase=false reproduz a contagem ANTIGA (dia-base fora); use só para
-// reconhecer vencimentos gravados antes de 17/11/2026, nunca para calcular novos.
-function calcularVencimento(dataBase, prazo, tipoPrazo, feriados = [], { contarDiaBase = true } = {}) {
+// contarDiaBase=true reproduz a contagem de 17 a 23/11/2026 (dia-base conta como dia 1);
+// use só para reconhecer vencimentos gravados nesse intervalo, nunca para calcular novos.
+function calcularVencimento(dataBase, prazo, tipoPrazo, feriados = [], { contarDiaBase = CONTAR_DIA_BASE } = {}) {
   if (tipoPrazo === 'sem_prazo') return null;
 
   const [a, m, d] = paraDataISO(dataBase).split('-').map(Number);
@@ -118,6 +124,7 @@ function iniciaNovaExecucao({ statusAtual, statusNovo, servicoAtualId, servicoNo
 
 module.exports = {
   FUSO,
+  CONTAR_DIA_BASE,
   hojeManaus,
   paraDataISO,
   formatarDataBR,

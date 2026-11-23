@@ -17,9 +17,13 @@ test('script de recálculo: classifica, simula sem gravar, aplica uma vez só', 
   const pool = require('../config/database');
   const { calcularVencimento } = require('../services/prazo-service');
   const feriados = (await pool.query('SELECT data FROM feriados')).rows.map((r) => r.data);
-  // Estado ANTIGO gravado em produção: contagem sem o dia-base. Estado NOVO: dia-base conta como dia 1.
-  const vencAntigo = (base, prazo = 3, tipo = 'uteis') => calcularVencimento(base, prazo, tipo, feriados, { contarDiaBase: false });
-  const vencNovo = (base, prazo = 3, tipo = 'uteis') => calcularVencimento(base, prazo, tipo, feriados);
+  // Estados que existem gravados em produção:
+  //  LEGADO   (antes de 17/11): vencimento contado da ENTRADA, a partir do dia seguinte;
+  //  INTERINO (17 a 23/11): dia da puxada contava como dia 1;
+  //  VIGENTE  (desde 23/11): conta a partir do dia útil SEGUINTE à puxada.
+  const vencLegado = (base, prazo = 3, tipo = 'uteis') => calcularVencimento(base, prazo, tipo, feriados, { contarDiaBase: false });
+  const vencInterino = (base, prazo = 3, tipo = 'uteis') => calcularVencimento(base, prazo, tipo, feriados, { contarDiaBase: true });
+  const vencVigente = (base, prazo = 3, tipo = 'uteis') => calcularVencimento(base, prazo, tipo, feriados);
 
   const reg = (await pool.query("SELECT id FROM usuarios WHERE cargo = 'Registrador' AND ativo = true ORDER BY id LIMIT 1")).rows[0];
   const atd = (await pool.query("SELECT id FROM usuarios WHERE ativo = true ORDER BY id DESC LIMIT 1")).rows[0];
@@ -46,22 +50,21 @@ test('script de recálculo: classifica, simula sem gravar, aplica uma vez só', 
   const puxada = (nome = srv.nome, quando = '2026-11-17 13:26:21') =>
     ['transferencia', `Protocolo transferido de X para Y, serviço definido como "${nome}"`, quando];
 
-  const A = await fixture('A-corrigir', { entrada: '2026-11-13', vencimento: vencAntigo('2026-11-13'), eventos: [criacao, puxada()] });
-  const B = await fixture('B-sem-servico', { entrada: '2026-11-13', vencimento: vencAntigo('2026-11-13'),
+  const A = await fixture('A-corrigir', { entrada: '2026-11-13', vencimento: vencLegado('2026-11-13'), eventos: [criacao, puxada()] });
+  const B = await fixture('B-sem-servico', { entrada: '2026-11-13', vencimento: vencLegado('2026-11-13'),
     eventos: [criacao, ['transferencia', 'Protocolo transferido de X para Y', '2026-11-17 13:26:21']] });
   const C = await fixture('C-venc-diverge', { entrada: '2026-11-13', vencimento: '2026-12-01', eventos: [criacao, puxada()] });
-  // puxado no mesmo dia da entrada, ainda com a contagem antiga (23/11): também muda para 19/11
-  const D = await fixture('D-mesmo-dia', { entrada: '2026-11-17', vencimento: vencAntigo('2026-11-17'),
+  // puxado no mesmo dia da entrada: o vencimento legado (18, 19, 23) já é o vigente, só falta a data-base
+  const D = await fixture('D-mesmo-dia', { entrada: '2026-11-17', vencimento: vencLegado('2026-11-17'),
     eventos: [['CRIACAO', 'criado', '2026-11-17 12:00:00'], puxada(srv.nome, '2026-11-17 13:00:00')] });
-  // entrada sexta 13/11, puxada segunda 16/11: a contagem antiga (13 fora: 16, 17, 18) e a nova
-  // (16, 17, 18) coincidem em 18/11, então só falta registrar a data-base
-  const D2 = await fixture('D2-registrar-base', { entrada: '2026-11-13', vencimento: vencAntigo('2026-11-13'),
+  // entrada sexta 13/11 (legado 16, 17, 18 = 18/11), puxada segunda 16/11 (vigente 17, 18, 19 = 19/11)
+  const D2 = await fixture('D2-puxada-depois', { entrada: '2026-11-13', vencimento: vencLegado('2026-11-13'),
     eventos: [criacao, puxada(srv.nome, '2026-11-16 13:00:00')] });
-  // data-base já gravada (código de 17/11 de manhã) mas sem contar o dia-base: é o caso do 224854
-  const E = await fixture('E-base-sem-dia-base', { entrada: '2026-11-13', vencimento: vencAntigo('2026-11-17'), base: '2026-11-17', eventos: [criacao, puxada()] });
-  const E2 = await fixture('E2-ja-correto', { entrada: '2026-11-13', vencimento: vencNovo('2026-11-17'), base: '2026-11-17', eventos: [criacao, puxada()] });
-  const F = await fixture('F-servico-difere', { entrada: '2026-11-13', vencimento: vencAntigo('2026-11-13'), eventos: [criacao, puxada(outro.nome)] });
-  const G = await fixture('G-edicao-depois', { entrada: '2026-11-13', vencimento: vencAntigo('2026-11-13'),
+  // data-base já gravada com a contagem INTERINA (dia da puxada = dia 1: 19/11): é o caso do 224854
+  const E = await fixture('E-base-interina', { entrada: '2026-11-13', vencimento: vencInterino('2026-11-17'), base: '2026-11-17', eventos: [criacao, puxada()] });
+  const E2 = await fixture('E2-ja-correto', { entrada: '2026-11-13', vencimento: vencVigente('2026-11-17'), base: '2026-11-17', eventos: [criacao, puxada()] });
+  const F = await fixture('F-servico-difere', { entrada: '2026-11-13', vencimento: vencLegado('2026-11-13'), eventos: [criacao, puxada(outro.nome)] });
+  const G = await fixture('G-edicao-depois', { entrada: '2026-11-13', vencimento: vencLegado('2026-11-13'),
     eventos: [criacao, puxada(), ['ATUALIZACAO', 'Protocolo atualizado', '2026-11-18 12:00:00']] });
   const todos = [A, B, C, D, D2, E, E2, F, G];
 
@@ -94,17 +97,18 @@ test('script de recálculo: classifica, simula sem gravar, aplica uma vez só', 
     const sim = rodar();
     assert.equal(sim[A.numero].classe, 'corrigir');
     assert.equal(sim[A.numero].data_base_proposta, '2026-11-17');
-    assert.equal(sim[A.numero].vencimento_atual, vencAntigo('2026-11-13'));
-    assert.equal(sim[A.numero].vencimento_novo, '2026-11-19'); // 17, 18 e 19
+    assert.equal(sim[A.numero].vencimento_atual, vencLegado('2026-11-13')); // 18/11
+    assert.equal(sim[A.numero].vencimento_novo, '2026-11-23'); // 18, 19, (20 feriado), 23
     assert.equal(sim[B.numero].classe, 'analisar_puxada_sem_servico_no_evento');
     assert.equal(sim[C.numero].classe, 'analisar_vencimento_nao_bate_com_calculo_pela_entrada');
-    assert.equal(sim[D.numero].classe, 'corrigir');
-    assert.equal(sim[D.numero].vencimento_novo, '2026-11-19');
-    assert.equal(sim[D2.numero].classe, 'registrar_data_base');
-    assert.equal(sim[D2.numero].vencimento_novo, sim[D2.numero].vencimento_atual); // vencimento já certo
+    assert.equal(sim[D.numero].classe, 'registrar_data_base');
+    assert.equal(sim[D.numero].vencimento_novo, sim[D.numero].vencimento_atual); // vencimento já certo
+    assert.equal(sim[D2.numero].classe, 'corrigir');
+    assert.equal(sim[D2.numero].vencimento_atual, '2026-11-18');
+    assert.equal(sim[D2.numero].vencimento_novo, '2026-11-19');
     assert.equal(sim[E.numero].classe, 'corrigir_contagem_dia_base');
-    assert.equal(sim[E.numero].vencimento_atual, '2026-11-23');
-    assert.equal(sim[E.numero].vencimento_novo, '2026-11-19');
+    assert.equal(sim[E.numero].vencimento_atual, '2026-11-19');
+    assert.equal(sim[E.numero].vencimento_novo, '2026-11-23');
     assert.equal(sim[E2.numero].classe, 'ja_tem_data_base');
     assert.equal(sim[F.numero].classe, 'analisar_servico_do_evento_difere_do_atual');
     assert.equal(sim[G.numero].classe, 'analisar_ultima_movimentacao_alterou_prazo');
@@ -119,11 +123,11 @@ test('script de recálculo: classifica, simula sem gravar, aplica uma vez só', 
 
     // ---- --classe: corrige só quem já tinha data-base gravada (como o 224854) e não toca nos antigos ----
     rodar('--apply', '--classe', 'corrigir_contagem_dia_base');
-    assert.deepEqual(await estado(E.id), { venc: '2026-11-19', base: '2026-11-17' }); // 23/11 -> 19/11, data-base preservada
+    assert.deepEqual(await estado(E.id), { venc: '2026-11-23', base: '2026-11-17' }); // 19/11 -> 23/11, data-base preservada
     const evE = await eventosRecalculo(E.id);
     assert.equal(evE.length, 1);
-    assert.match(evE[0].descricao, /passa a contar como dia 1/);
-    assert.match(evE[0].descricao, /anterior: 23\/11\/2026; novo: 19\/11\/2026/);
+    assert.match(evE[0].descricao, /volta a começar no dia útil seguinte/);
+    assert.match(evE[0].descricao, /anterior: 19\/11\/2026; novo: 23\/11\/2026/);
     for (const x of [A, B, C, D, D2, E2, F, G]) assert.deepEqual(await estado(x.id), antes[x.numero], 'o filtro --classe não podia alterar ' + x.numero);
     rodar('--apply', '--classe', 'corrigir_contagem_dia_base'); // repetir não faz nada
     assert.equal((await eventosRecalculo(E.id)).length, 1);
@@ -132,16 +136,16 @@ test('script de recálculo: classifica, simula sem gravar, aplica uma vez só', 
 
     // ---- aplicação restrita a um protocolo ----
     rodar('--apply', '--numero', A.numero);
-    assert.deepEqual(await estado(A.id), { venc: '2026-11-19', base: '2026-11-17' });
+    assert.deepEqual(await estado(A.id), { venc: '2026-11-23', base: '2026-11-17' });
     const ev = await eventosRecalculo(A.id);
     assert.equal(ev.length, 1);
     assert.match(ev[0].descricao, /17\/11\/2026/);
-    assert.match(ev[0].descricao, new RegExp('anterior: ' + vencAntigo('2026-11-13').split('-').reverse().join('/')));
+    assert.match(ev[0].descricao, new RegExp('anterior: ' + vencLegado('2026-11-13').split('-').reverse().join('/')));
     for (const x of [B, C, D, D2, E, E2, F, G]) assert.deepEqual(await estado(x.id), antes[x.numero], 'não deveria alterar ' + x.numero);
 
     // ---- repetir a aplicação não faz nada (A já tem data-base e a contagem certa) ----
     rodar('--apply', '--numero', A.numero);
-    assert.deepEqual(await estado(A.id), { venc: '2026-11-19', base: '2026-11-17' });
+    assert.deepEqual(await estado(A.id), { venc: '2026-11-23', base: '2026-11-17' });
     assert.equal((await eventosRecalculo(A.id)).length, 1);
     assert.equal(rodar('--numero', A.numero)[A.numero].classe, 'ja_tem_data_base');
   } finally {

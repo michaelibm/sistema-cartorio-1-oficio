@@ -2,9 +2,10 @@
 // Recalcula o vencimento de protocolos EM ANDAMENTO gravados com a regra antiga:
 //   (a) puxados/distribuídos antes da correção da data-base (prazo contado da data
 //       de entrada em vez da data da puxada/distribuição) e
-//   (b) já com data-base, mas calculados sem contar o dia-base (até 17/11/2026 o
-//       sistema começava a contar no dia seguinte; a regra agora é o dia-base
-//       contar como dia 1: puxado em 17/11, 3 dias úteis = 17, 18, 19).
+//   (b) já com data-base, mas calculados com a contagem INTERINA de 17 a 23/11/2026
+//       (o dia da puxada contava como dia 1: puxado 17/11, 3 úteis = 17, 18, 19). A regra
+//       vigente (confirmada em 23/11) não conta o dia da puxada: começa no dia útil
+//       seguinte (puxado 18/11, 3 úteis = 19, 23, 24 -> vence 24/11).
 //
 // SIMULAÇÃO POR PADRÃO: sem --apply nada é gravado no banco; o script só lista,
 // grava um CSV com valor atual x valor recalculado e imprime o resumo.
@@ -40,7 +41,8 @@
 const fs = require('fs');
 const pool = require('../config/database');
 const { calcularVencimento, formatarDataBR } = require('../services/prazo-service');
-const ANTIGA = { contarDiaBase: false }; // contagem usada até 17/11/2026
+const LEGADA = { contarDiaBase: false };  // contagem de antes de 17/11 (vencimentos gravados pela entrada)
+const INTERINA = { contarDiaBase: true }; // contagem de 17 a 23/11/2026 (dia da puxada = dia 1)
 
 const args = process.argv.slice(2);
 const opt = (nome) => {
@@ -61,7 +63,7 @@ const SAIDA = opt('--saida') || `recalculo-prazos-${agora}.csv`;
 
 const CLASSES = {
   CORRIGIR: 'corrigir',                          // vencimento muda
-  CORRIGIR_CONTAGEM: 'corrigir_contagem_dia_base', // data-base já gravada; só falta contar o dia-base
+  CORRIGIR_CONTAGEM: 'corrigir_contagem_dia_base', // data-base já gravada com a contagem interina (dia da puxada = dia 1)
   REGISTRAR_BASE: 'registrar_data_base',         // vencimento já certo; só grava a data-base
   JA_REGISTRADO: 'ja_tem_data_base',             // criado/puxado depois da correção
   SEM_PRAZO: 'servico_sem_prazo',
@@ -131,14 +133,14 @@ async function main() {
     if (p.tipo_prazo === 'sem_prazo') { item.classe = p.prazo_base_data ? CLASSES.JA_REGISTRADO : CLASSES.SEM_PRAZO; return item; }
     if (p.prazo_base_data) {
       // Data-base já gravada: só corrige se o vencimento é exatamente o da contagem
-      // antiga (sem o dia-base) e difere do da regra atual.
-      const antigo = calcularVencimento(p.prazo_base_data, p.prazo, p.tipo_prazo, feriados, ANTIGA);
-      const atual = calcularVencimento(p.prazo_base_data, p.prazo, p.tipo_prazo, feriados);
-      if (p.data_vencimento === antigo && antigo !== atual) {
+      // interina (dia da puxada = dia 1) e difere do da regra vigente.
+      const interina = calcularVencimento(p.prazo_base_data, p.prazo, p.tipo_prazo, feriados, INTERINA);
+      const vigente = calcularVencimento(p.prazo_base_data, p.prazo, p.tipo_prazo, feriados);
+      if (p.data_vencimento === interina && interina !== vigente) {
         item.classe = CLASSES.CORRIGIR_CONTAGEM;
         item.data_base_proposta = p.prazo_base_data;
-        item.vencimento_novo = atual;
-        item.motivo = 'vencimento gravado sem contar o dia-base';
+        item.vencimento_novo = vigente;
+        item.motivo = 'vencimento gravado com a contagem interina (dia da puxada contava como dia 1)';
       } else {
         item.classe = CLASSES.JA_REGISTRADO;
       }
@@ -164,7 +166,7 @@ async function main() {
       return item;
     }
 
-    const pelaEntrada = calcularVencimento(p.data_entrada, p.prazo, p.tipo_prazo, feriados, ANTIGA);
+    const pelaEntrada = calcularVencimento(p.data_entrada, p.prazo, p.tipo_prazo, feriados, LEGADA);
     if (p.data_vencimento !== pelaEntrada) {
       item.classe = CLASSES.ANALISAR_VENC_DIVERGE;
       item.motivo = `vencimento gravado ${p.data_vencimento} difere do cálculo pela entrada (${pelaEntrada}); alguém alterou depois`;
@@ -235,7 +237,7 @@ async function main() {
         `INSERT INTO historico (protocolo_id, usuario_id, acao, descricao, created_at)
          VALUES ($1, NULL, 'RECALCULO_PRAZO', $2, NOW())`,
         [i.id, (i.classe === CLASSES.CORRIGIR_CONTAGEM
-          ? `Prazo ajustado: o dia da puxada/distribuição (${formatarDataBR(i.data_base_proposta)}) passa a contar como dia 1. `
+          ? `Prazo ajustado: a contagem volta a começar no dia útil seguinte à puxada/distribuição (${formatarDataBR(i.data_base_proposta)}). `
           : `Prazo recalculado a partir da puxada/distribuição em ${formatarDataBR(i.data_base_proposta)} (evento ${i.evento}). `) +
           `Vencimento anterior: ${formatarDataBR(i.vencimento_atual)}; novo: ${formatarDataBR(i.vencimento_novo)}. ` +
           `Correção em lote (scripts/recalcular-prazos-puxada.js).`]
