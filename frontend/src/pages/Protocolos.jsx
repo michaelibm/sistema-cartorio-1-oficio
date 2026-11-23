@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { API_URL } from "../services/api";
+import { dataLocal } from "../utils/datas";
 
 import "./Protocolos.css";
 import {
@@ -110,7 +111,7 @@ const corLinha = (p) => {
   if (["concluido","concluído","cancelado","concluido_parcial"].includes((p.status||"").toLowerCase())) return {};
   if (!p.data_vencimento) return {};
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-  const venc = new Date(p.data_vencimento); venc.setHours(0, 0, 0, 0);
+  const venc = dataLocal(p.data_vencimento); venc.setHours(0, 0, 0, 0);
   const diff = Math.ceil((venc - hoje) / (1000 * 60 * 60 * 24));
   if (diff < 0)  return { background: "#fff1f2", borderLeft: "4px solid #ef4444" };
   if (diff <= 3) return { background: "#fffbeb", borderLeft: "4px solid #f59e0b" };
@@ -884,7 +885,7 @@ export default function Protocolos({ usuario }) {
       const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
       base = base.filter((p) => {
         if (!p.data_vencimento) return false;
-        const venc = new Date(p.data_vencimento); venc.setHours(0, 0, 0, 0);
+        const venc = dataLocal(p.data_vencimento); venc.setHours(0, 0, 0, 0);
         return venc < hoje;
       });
     } else if (fStatus === "__devolvido__") {
@@ -1694,7 +1695,7 @@ export default function Protocolos({ usuario }) {
                         <span style={{ color: "#9ca3af" }}>Sem prazo</span>
                       ) : (() => {
                         const hoje = new Date(); hoje.setHours(0,0,0,0);
-                        const venc = new Date(p.data_vencimento); venc.setHours(0,0,0,0);
+                        const venc = dataLocal(p.data_vencimento); venc.setHours(0,0,0,0);
                         const diff = Math.ceil((venc - hoje) / (1000 * 60 * 60 * 24));
                         const isAtivo = !["concluido","concluído","cancelado"].includes((p.status||"").toLowerCase());
                         return (

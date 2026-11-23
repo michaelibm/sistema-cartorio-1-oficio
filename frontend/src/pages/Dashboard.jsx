@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { getProtocolos, API_URL } from '../services/api';
+import { dataLocal, formatarDataBR } from '../utils/datas';
 
 // Fuso horário de Manaus (UTC-4, sem horário de verão)
 const MANAUS_OFFSET = -4 * 60; // minutos
@@ -177,7 +178,7 @@ function Dashboard() {
         const entrada = new Date(p.data_entrada);
         if (entrada >= inicioMes && entrada <= fimMes) return true;
         if (!p.data_vencimento) return false;
-        const venc = new Date(p.data_vencimento);
+        const venc = dataLocal(p.data_vencimento);
         return venc >= inicioMes && venc <= fimMes;
       };
 
@@ -206,7 +207,7 @@ function Dashboard() {
       const protocolosAtrasados = protocolosDoperiodo.filter(p => {
         if (p.status !== 'andamento') return false;
         if (!p.data_vencimento) return false;
-        const vencimento = new Date(p.data_vencimento);
+        const vencimento = dataLocal(p.data_vencimento);
         vencimento.setHours(0, 0, 0, 0);
         return vencimento < hoje;
       });
@@ -214,7 +215,7 @@ function Dashboard() {
       const protocolosVencendo3 = protocolosDoperiodo.filter(p => {
         if (p.status !== 'andamento') return false;
         if (!p.data_vencimento) return false;
-        const vencimento = new Date(p.data_vencimento);
+        const vencimento = dataLocal(p.data_vencimento);
         vencimento.setHours(0, 0, 0, 0);
         const diff = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
         return diff >= 0 && diff <= 3;
@@ -223,12 +224,12 @@ function Dashboard() {
       const protocolosVencendo7 = protocolosDoperiodo.filter(p => {
         if (p.status !== 'andamento') return false;
         if (!p.data_vencimento) return false;
-        const vencimento = new Date(p.data_vencimento);
+        const vencimento = dataLocal(p.data_vencimento);
         vencimento.setHours(0, 0, 0, 0);
         const diff = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
         return diff >= 0 && diff <= 7;
       }).map(p => {
-        const vencimento = new Date(p.data_vencimento);
+        const vencimento = dataLocal(p.data_vencimento);
         vencimento.setHours(0, 0, 0, 0);
         const diasRestantes = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
         return { ...p, diasRestantes };
@@ -243,7 +244,7 @@ function Dashboard() {
 
       setVencendo7Dias(protocolosVencendo7);
       setAtrasados(protocolosAtrasados.map(p => {
-        const vencimento = new Date(p.data_vencimento);
+        const vencimento = dataLocal(p.data_vencimento);
         vencimento.setHours(0, 0, 0, 0);
         const diasAtraso = diasUteisEntre(vencimento, hoje);
         return { ...p, diasAtraso };
@@ -287,8 +288,8 @@ function Dashboard() {
       (p.responsavel_nome && p.responsavel_nome.toLowerCase().includes(filtroBuscaTabela.toLowerCase()));
     let matchVenc = true;
     if (filtroVencInicio || filtroVencFim) matchVenc = !!p.data_vencimento;
-    if (filtroVencInicio) matchVenc = matchVenc && new Date(p.data_vencimento) >= new Date(filtroVencInicio);
-    if (filtroVencFim) matchVenc = matchVenc && new Date(p.data_vencimento) <= new Date(filtroVencFim + 'T23:59:59');
+    if (filtroVencInicio) matchVenc = matchVenc && dataLocal(p.data_vencimento) >= new Date(filtroVencInicio);
+    if (filtroVencFim) matchVenc = matchVenc && dataLocal(p.data_vencimento) <= new Date(filtroVencFim + 'T23:59:59');
     return matchStatus && matchBusca && matchVenc;
   });
 
@@ -374,7 +375,7 @@ function Dashboard() {
                       {p.data_entrada ? new Date(p.data_entrada).toLocaleDateString('pt-BR') : '-'}
                     </td>
                     <td style={{ padding: '0.875rem 1rem', color: '#6b7280', fontSize: '0.875rem' }}>
-                      {p.data_vencimento ? new Date(p.data_vencimento).toLocaleDateString('pt-BR') : '-'}
+                      {p.data_vencimento ? formatarDataBR(p.data_vencimento) : '-'}
                     </td>
                     <td style={{ padding: '0.875rem 1rem' }}>
                       <span style={{ background: sc.bg, color: sc.text, padding: '0.25rem 0.625rem', borderRadius: '9999px', fontSize: '0.8rem', fontWeight: '600' }}>
@@ -619,7 +620,7 @@ function Dashboard() {
                       <td style={{ padding: '1rem', color: '#4b5563' }}>{p.servico_nome}</td>
                       <td style={{ padding: '1rem', color: '#4b5563' }}>{p.responsavel_nome}</td>
                       <td style={{ padding: '1rem', color: '#4b5563' }}>
-                        {new Date(p.data_vencimento).toLocaleDateString('pt-BR')}
+                        {formatarDataBR(p.data_vencimento)}
                       </td>
                       <td style={{ padding: '1rem', textAlign: 'center' }}>
                         <span style={{
@@ -695,7 +696,7 @@ function Dashboard() {
                     <td style={{ padding: '1rem', color: '#4b5563' }}>{p.servico_nome}</td>
                     <td style={{ padding: '1rem', color: '#4b5563' }}>{p.responsavel_nome}</td>
                     <td style={{ padding: '1rem', color: '#4b5563' }}>
-                      {new Date(p.data_vencimento).toLocaleDateString('pt-BR')}
+                      {formatarDataBR(p.data_vencimento)}
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
                       <span style={{

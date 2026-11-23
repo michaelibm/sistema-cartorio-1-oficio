@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMinhaProductividade } from '../services/api';
+import { formatarDataBR } from '../utils/datas';
 
 const CATEGORIAS = [
   { key: 'aguardando',    label: 'Aguardando',    icon: '⏳', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
@@ -81,7 +82,7 @@ function MinhaProductividade({ usuario }) {
     ];
     if (!todos.length) { mostrarToast('Nenhum dado para exportar.'); return; }
 
-    const fmt = d => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+    const fmt = d => formatarDataBR(d) || '—';
     const linhas = [
       ['Número', 'Serviço', 'Status', 'Data Entrada', 'Data Vencimento', 'Data Conclusão'],
       ...todos.map(p => [p.numero, p.servico_nome, p.status_label, fmt(p.data_entrada), fmt(p.data_vencimento), fmt(p.data_conclusao)]),
