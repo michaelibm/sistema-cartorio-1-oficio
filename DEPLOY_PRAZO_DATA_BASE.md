@@ -139,13 +139,22 @@ e disco vazio (dá para reconstruir o frontend). Mesmo código dos outros (merge
 
 ### Pendências de decisão / trabalho futuro (precisam do Michael)
 
-- [ ] **DECISÃO ABERTA - contagem do dia da puxada (23/11/2026).** Em 17/11 o Michael definiu que o dia
-      da puxada conta como dia 1 (puxado 17/11, 3 úteis = 17, 18, 19). Em 23/11 ele mostrou o protocolo
-      224947 (1RI), puxado em 18/11, e esperava vencer em **24/11**, contando a partir do dia
-      seguinte (19, 23, 24, pulando o feriado do dia 20), o oposto da regra de 17/11. O sistema hoje
-      grava 23/11 (18, 19, 23). **Não alterar a regra sem a confirmação do Michael:** inverter exige
-      mudar `calcularVencimento` (padrão `contarDiaBase`) e refazer o recálculo nos 3 cartórios
-      (1RI, 4RI e 6RI), com backup antes. Ver a pergunta registrada na conversa.
+- [x] **DECISÃO RESOLVIDA - contagem do dia da puxada (23/11/2026): regra B, o dia da puxada NÃO conta.**
+      O Michael confirmou com o protocolo 224947 (1RI, puxado quarta 18/11, 3 úteis, feriado dia 20):
+      19, 23 e 24 -> vence **24/11**. A regra de 17/11 (dia da puxada = dia 1) foi revertida.
+      Código: `CONTAR_DIA_BASE = false` em `prazo-service.js` (commit `0be6e55`).
+      **Implantada nos 3 cartórios em 23/11/2026**, sempre com backup antes e backend implantado
+      ANTES do recálculo (para nenhuma puxada nova sair com a regra errada):
+      - 1RI: backup `backup_20261123_092839_antes_regraB.sql`; **200** protocolos revertidos
+        (classe `corrigir_contagem_dia_base`, 4 lotes); 224947 agora vence 24/11.
+      - 4RI: backup `backup_4ri_20261123_093019_antes_regraB.sql`; **177** revertidos.
+      - 6RI: backup `backup_6ri_20261123_093151_antes_regraB.sql`; **237** revertidos.
+      Valores anteriores: `regraB_antes_20261123.csv` em cada servidor e o evento `RECALCULO_PRAZO`
+      de cada protocolo. Rollback do backend: tag `rollback-regraB` em cada um.
+- [ ] **6RI - recálculo dos protocolos puxados ANTES de 17/11 (ainda não autorizado):** na simulação
+      de 23/11, **271** mudam de vencimento (259 já aparecem vencidos hoje) e **8** só registram a
+      data-base; **284** puxadas sem serviço no evento e 16 com movimentação posterior ficam de fora.
+      Os dois primeiros grupos só serão aplicados com autorização (backup antes, lotes de 50).
 - [x] **Frontend marcava "VENCIDO" um dia antes em Manaus** - corrigido em 23/11/2026 (commit
       `3586652`, `frontend/src/utils/datas.js`): protocolo que vence hoje mostra "HOJE" e só vira
       vencido no dia seguinte. **Implantado só no 1RI** (backup `backup_20261123_092124_antes_fix_vencido.sql`,
